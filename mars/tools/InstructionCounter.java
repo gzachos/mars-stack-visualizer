@@ -47,101 +47,105 @@ import mars.mips.instructions.BasicInstructionFormat;
 
 /**
  * 
- * Instruction counter tool. Can be used to know how many instructions
- * were executed to complete a given program. 
+ * Instruction counter tool. Can be used to know how many instructions were
+ * executed to complete a given program.
  * 
  * Code slightly based on MemoryReferenceVisualization.
  * 
  * @author Felipe Lessa <felipe.lessa@gmail.com>
  *
  */
-//@SuppressWarnings("serial")
+// @SuppressWarnings("serial")
 public class InstructionCounter extends AbstractMarsToolAndApplication {
-    private static String name    = "Instruction Counter";
-    private static String version = "Version 1.0 (Felipe Lessa)";
-    private static String heading = "Counting the number of instructions executed";
-    
-    /**
-     * Number of instructions executed until now.
-     */
-    protected int counter = 0;
-    private JTextField counterField;
-    
-    /**
-     * Number of instructions of type R.
-     */
-    protected int counterR = 0;
+	private static String name = "Instruction Counter";
+	private static String version = "Version 1.0 (Felipe Lessa)";
+	private static String heading = "Counting the number of instructions executed";
+
+	/**
+	 * Number of instructions executed until now.
+	 */
+	protected int counter = 0;
+	private JTextField counterField;
+
+	/**
+	 * Number of instructions of type R.
+	 */
+	protected int counterR = 0;
 	private JTextField counterRField;
 	private JProgressBar progressbarR;
-    
-    /**
-     * Number of instructions of type I.
-     */
-    protected int counterI = 0;
+
+	/**
+	 * Number of instructions of type I.
+	 */
+	protected int counterI = 0;
 	private JTextField counterIField;
 	private JProgressBar progressbarI;
-    
-    /**
-     * Number of instructions of type J.
-     */
-    protected int counterJ = 0;
+
+	/**
+	 * Number of instructions of type J.
+	 */
+	protected int counterJ = 0;
 	private JTextField counterJField;
 	private JProgressBar progressbarJ;
-    
-    
-    /**
-     * The last address we saw. We ignore it because the only way for a
-     * program to execute twice the same instruction is to enter an infinite
-     * loop, which is not insteresting in the POV of counting instructions.
-     */
-    protected int lastAddress = -1;
-    
-   	/**
-   	 * Simple constructor, likely used to run a stand-alone memory reference visualizer.
-   	 * @param title String containing title for title bar
-   	 * @param heading String containing text for heading shown in upper part of window.
-   	 */
-    public InstructionCounter(String title, String heading) {
-    	super(title,heading);
-    }
-    
-    /**
-     * Simple construction, likely used by the MARS Tools menu mechanism.
-     */
-    public InstructionCounter() {
-    	super(name + ", " + version, heading);
-    }
 
-//	@Override
+	/**
+	 * The last address we saw. We ignore it because the only way for a program
+	 * to execute twice the same instruction is to enter an infinite loop, which
+	 * is not insteresting in the POV of counting instructions.
+	 */
+	protected int lastAddress = -1;
+
+	/**
+	 * Simple constructor, likely used to run a stand-alone memory reference
+	 * visualizer.
+	 * 
+	 * @param title
+	 *            String containing title for title bar
+	 * @param heading
+	 *            String containing text for heading shown in upper part of
+	 *            window.
+	 */
+	public InstructionCounter(String title, String heading) {
+		super(title, heading);
+	}
+
+	/**
+	 * Simple construction, likely used by the MARS Tools menu mechanism.
+	 */
+	public InstructionCounter() {
+		super(name + ", " + version, heading);
+	}
+
+	// @Override
 	public String getName() {
 		return name;
 	}
-	
-//	@Override
+
+	// @Override
 	protected JComponent buildMainDisplayArea() {
 		// Create everything
 		JPanel panel = new JPanel(new GridBagLayout());
 
 		counterField = new JTextField("0", 10);
 		counterField.setEditable(false);
-		
+
 		counterRField = new JTextField("0", 10);
 		counterRField.setEditable(false);
 		progressbarR = new JProgressBar(JProgressBar.HORIZONTAL);
 		progressbarR.setStringPainted(true);
-		
+
 		counterIField = new JTextField("0", 10);
 		counterIField.setEditable(false);
 		progressbarI = new JProgressBar(JProgressBar.HORIZONTAL);
 		progressbarI.setStringPainted(true);
-		
+
 		counterJField = new JTextField("0", 10);
 		counterJField.setEditable(false);
 		progressbarJ = new JProgressBar(JProgressBar.HORIZONTAL);
 		progressbarJ.setStringPainted(true);
-		
+
 		// Add them to the panel
-		
+
 		// Fields
 		GridBagConstraints c = new GridBagConstraints();
 		c.anchor = GridBagConstraints.LINE_START;
@@ -154,13 +158,13 @@ public class InstructionCounter extends AbstractMarsToolAndApplication {
 		c.insets = new Insets(0, 0, 0, 0);
 		c.gridy++;
 		panel.add(counterRField, c);
-		
+
 		c.gridy++;
 		panel.add(counterIField, c);
-		
+
 		c.gridy++;
 		panel.add(counterJField, c);
-		
+
 		// Labels
 		c.anchor = GridBagConstraints.LINE_END;
 		c.gridx = 1;
@@ -174,40 +178,43 @@ public class InstructionCounter extends AbstractMarsToolAndApplication {
 		c.gridwidth = 1;
 		c.gridy++;
 		panel.add(new JLabel("R-type: "), c);
-		
+
 		c.gridy++;
 		panel.add(new JLabel("I-type: "), c);
-		
+
 		c.gridy++;
 		panel.add(new JLabel("J-type: "), c);
-		
+
 		// Progress bars
 		c.insets = new Insets(3, 3, 3, 3);
 		c.gridx = 4;
 		c.gridy = 2;
 		panel.add(progressbarR, c);
-		
+
 		c.gridy++;
 		panel.add(progressbarI, c);
-		
+
 		c.gridy++;
 		panel.add(progressbarJ, c);
-		
+
 		return panel;
 	}
-	
-//	@Override
+
+	// @Override
 	protected void addAsObserver() {
 		addAsObserver(Memory.textBaseAddress, Memory.textLimitAddress);
 	}
 
-//	@Override
+	// @Override
 	protected void processMIPSUpdate(Observable resource, AccessNotice notice) {
-		if (!notice.accessIsFromMIPS()) return;
-		if (notice.getAccessType() != AccessNotice.READ) return;
+		if (!notice.accessIsFromMIPS())
+			return;
+		if (notice.getAccessType() != AccessNotice.READ)
+			return;
 		MemoryAccessNotice m = (MemoryAccessNotice) notice;
 		int a = m.getAddress();
-		if (a == lastAddress) return;
+		if (a == lastAddress)
+			return;
 		lastAddress = a;
 		counter++;
 		try {
@@ -216,8 +223,7 @@ public class InstructionCounter extends AbstractMarsToolAndApplication {
 			BasicInstructionFormat format = instr.getInstructionFormat();
 			if (format == BasicInstructionFormat.R_FORMAT)
 				counterR++;
-			else if (format == BasicInstructionFormat.I_FORMAT
-					|| format == BasicInstructionFormat.I_BRANCH_FORMAT)
+			else if (format == BasicInstructionFormat.I_FORMAT || format == BasicInstructionFormat.I_BRANCH_FORMAT)
 				counterI++;
 			else if (format == BasicInstructionFormat.J_FORMAT)
 				counterJ++;
@@ -227,44 +233,44 @@ public class InstructionCounter extends AbstractMarsToolAndApplication {
 		}
 		updateDisplay();
 	}
-	
-//	@Override
+
+	// @Override
 	protected void initializePreGUI() {
 		counter = counterR = counterI = counterJ = 0;
 		lastAddress = -1;
 	}
-	
-// @Override
+
+	// @Override
 	protected void reset() {
 		counter = counterR = counterI = counterJ = 0;
-		lastAddress = -1;		
+		lastAddress = -1;
 		updateDisplay();
 	}
-	
-//	@Override
+
+	// @Override
 	protected void updateDisplay() {
 		counterField.setText(String.valueOf(counter));
-		
+
 		counterRField.setText(String.valueOf(counterR));
 		progressbarR.setMaximum(counter);
 		progressbarR.setValue(counterR);
-		
+
 		counterIField.setText(String.valueOf(counterI));
 		progressbarI.setMaximum(counter);
 		progressbarI.setValue(counterI);
-		
+
 		counterJField.setText(String.valueOf(counterJ));
 		progressbarJ.setMaximum(counter);
 		progressbarJ.setValue(counterJ);
-		
+
 		if (counter == 0) {
 			progressbarR.setString("0%");
 			progressbarI.setString("0%");
 			progressbarJ.setString("0%");
 		} else {
-			progressbarR.setString((counterR * 100)/counter + "%");
-			progressbarI.setString((counterI * 100)/counter + "%");
-			progressbarJ.setString((counterJ * 100)/counter + "%");
+			progressbarR.setString((counterR * 100) / counter + "%");
+			progressbarI.setString((counterI * 100) / counter + "%");
+			progressbarJ.setString((counterJ * 100) / counter + "%");
 		}
 	}
 }

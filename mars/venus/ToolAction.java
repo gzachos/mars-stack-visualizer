@@ -1,9 +1,10 @@
-   package mars.venus;
-	import mars.tools.*;
-   import javax.swing.*;
-   import java.awt.event.*;
-	
-	/*
+package mars.venus;
+
+import mars.tools.*;
+import javax.swing.*;
+import java.awt.event.*;
+
+/*
 Copyright (c) 2003-2006,  Pete Sanderson and Kenneth Vollmar
 
 Developed by Pete Sanderson (psanderson@otterbein.edu)
@@ -29,43 +30,48 @@ CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 (MIT license, http://www.opensource.org/licenses/mit-license.html)
+*/
+
+/**
+ * Connects a MarsTool class (class that implements MarsTool interface) to the
+ * Mars menu system by supplying the response to that tool's menu item
+ * selection.
+ * 
+ * @author Pete Sanderson
+ * @version August 2005
  */
 
-    /**
-	  *  Connects a MarsTool class (class that implements MarsTool interface) to
-	  *  the Mars menu system by supplying the response to that tool's menu item 
-	  *  selection.
-	  *  
-	  *  @author Pete Sanderson
-	  *  @version August 2005
-	  */
-	  
-    public class ToolAction extends AbstractAction {
-      private Class toolClass; //MarsTool tool;
-   	
-		/**
-		 *  Simple constructor.
-		 *
-		 *  @param toolClass Class object for the associated MarsTool subclass
-		 *  @param toolName Name of this tool, for the menu.
-		 */
-       public ToolAction(Class toolClass, String toolName) { 
-		   super(toolName, null); 
-         this.toolClass = toolClass;
-      }
+public class ToolAction extends AbstractAction {
+	private Class toolClass; // MarsTool tool;
 
-			
-		/**
-		 *  Response when tool's item selected from menu.  Invokes tool's action() method.
-		 *
-		 *  @param e the ActionEvent that triggered this call
-		 */
-       public void actionPerformed(ActionEvent e) {
-		 try {  
-		    // An exception should not occur here because we got here only after
-			 // already successfully creating an instance from the same Class object 
-			 // in ToolLoader's loadMarsTools() method.
-          ((MarsTool)this.toolClass.newInstance()).action(); 
-			 } catch (Exception ex) { }  
-      }
-   }
+	/**
+	 * Simple constructor.
+	 *
+	 * @param toolClass
+	 *            Class object for the associated MarsTool subclass
+	 * @param toolName
+	 *            Name of this tool, for the menu.
+	 */
+	public ToolAction(Class toolClass, String toolName) {
+		super(toolName, null);
+		this.toolClass = toolClass;
+	}
+
+	/**
+	 * Response when tool's item selected from menu. Invokes tool's action()
+	 * method.
+	 *
+	 * @param e
+	 *            the ActionEvent that triggered this call
+	 */
+	public void actionPerformed(ActionEvent e) {
+		try {
+			// An exception should not occur here because we got here only after
+			// already successfully creating an instance from the same Class
+			// object
+			// in ToolLoader's loadMarsTools() method.
+			((MarsTool) this.toolClass.newInstance()).action();
+		} catch (Exception ex) {
+		}
+	}
+}
