@@ -91,7 +91,7 @@ public class InstructionCounter extends AbstractMarsToolAndApplication {
 	/**
 	 * The last address we saw. We ignore it because the only way for a program
 	 * to execute twice the same instruction is to enter an infinite loop, which
-	 * is not insteresting in the POV of counting instructions.
+	 * is not interesting in the POV of counting instructions.
 	 */
 	protected int lastAddress = -1;
 

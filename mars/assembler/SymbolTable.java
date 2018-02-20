@@ -32,7 +32,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 /**
- * Creats a table of Symbol objects.
+ * Creates a table of Symbol objects.
  * 
  * @author Jason Bumgarner, Jason Shrewsbury
  * @version June 2003

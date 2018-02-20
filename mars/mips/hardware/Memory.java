@@ -94,7 +94,7 @@ public class Memory extends Observable {
 	public static int kernelDataBaseAddress = MemoryConfigurations.getDefaultKernelDataBaseAddress(); // 0x90000000;
 	/** starting address for memory mapped I/O: 0xffff0000 (-65536) **/
 	public static int memoryMapBaseAddress = MemoryConfigurations.getDefaultMemoryMapBaseAddress(); // 0xffff0000;
-	/** highest address acessible in kernel mode. **/
+	/** highest address accessible in kernel mode. **/
 	public static int kernelHighAddress = MemoryConfigurations.getDefaultKernelHighAddress(); // 0xffffffff;
 
 	/** MIPS word length in bytes. **/
