@@ -11,7 +11,6 @@ import javax.swing.JPanel;
 import mars.mips.hardware.AccessNotice;
 import mars.mips.hardware.Memory;
 import mars.mips.hardware.MemoryAccessNotice;
-import mars.mips.hardware.Register;
 import mars.mips.hardware.RegisterAccessNotice;
 import mars.mips.hardware.RegisterFile;
 
@@ -21,6 +20,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static String name = "Stack Visualizer";
 	private static String version = "Version 0.1 (George Z. Zachos, Petros Manousis)";
 	private static String heading = "Visualizing stack modification operations";
+
+	private static int spRegNumber = RegisterFile.STACK_POINTER_REGISTER;
 
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
@@ -42,37 +43,37 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		panel.add(new JLabel("Test Label Content"));
 		return panel;
 	}
-	
-	// @Override
+
+	@Override
 	protected void addAsObserver() {
 		addAsObserver(Memory.stackLimitAddress, Memory.stackBaseAddress);
-		addAsObserver(RegisterFile.getRegisters()[RegisterFile.STACK_POINTER_REGISTER]);
+		addAsObserver(RegisterFile.getRegisters()[spRegNumber]);
 	}
 
-	
 	@Override
 	protected void processMIPSUpdate(Observable resource, AccessNotice notice) {
 
-		if (notice instanceof MemoryAccessNotice)
-		{
+		if (notice instanceof MemoryAccessNotice) {
 			MemoryAccessNotice m = (MemoryAccessNotice) notice;
 			System.out.println("MemoryAccessNotice (" + 
 					((m.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
 					+ hex(m.getAddress()) + " value: " + m.getValue());
 		}
-		if (notice instanceof RegisterAccessNotice)
-		{
+		else if (notice instanceof RegisterAccessNotice) {
 			RegisterAccessNotice r = (RegisterAccessNotice) notice;
 			if (r.getAccessType() == AccessNotice.READ)
 				return;
-			System.out.println("RegisterAccessNotice (W): " + r.getRegisterName());
+			System.out.println("RegisterAccessNotice (W): " + r.getRegisterName()
+					+ " value: " + hex(getSpValue()));
 		}
-		
-		super.processMIPSUpdate(resource, notice);
 	}
-	
-	private static String hex(int dec) {
-		return Integer.toHexString(dec);
+
+	private String hex(int decimalValue) {
+		return Integer.toHexString(decimalValue);
 	}
-	
+
+	private int getSpValue() {
+		return RegisterFile.getValue(spRegNumber);
+	}
+
 }
