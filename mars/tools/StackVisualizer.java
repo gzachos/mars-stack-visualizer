@@ -6,6 +6,7 @@ import java.util.Observable;
 
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTable;
 
 import mars.mips.hardware.AccessNotice;
@@ -18,20 +19,23 @@ import mars.mips.hardware.RegisterFile;
 @SuppressWarnings("serial")
 public class StackVisualizer extends AbstractMarsToolAndApplication {
 
-	private static String name = "Stack Visualizer";
+	private static String name    = "Stack Visualizer";
 	private static String version = "Version 0.1 (George Z. Zachos, Petros Manousis)";
 	private static String heading = "Visualizing stack modification operations";
 
-	private static int     spRegNumber = RegisterFile.STACK_POINTER_REGISTER;
-	private static int     spAddr      = Memory.stackPointer;
-	private static Memory  memInstance = Memory.getInstance();
-	private static boolean endianness  = memInstance.getByteOrder();
+	private static int       spRegNumber  = RegisterFile.STACK_POINTER_REGISTER;
+	private static final int SP_INIT_ADDR = Memory.stackPointer;
+	private static Memory    memInstance  = Memory.getInstance();
+	private static boolean   endianness   = memInstance.getByteOrder();
 	
-	private static int        memRange = 8;
-	private static Object[][] data     = new Object[memRange][5];;
-	private static Object[]   colNames = {"Address", "-0", "-1", "-2", "-3"};
+	private static int        TABLECELLS_PER_ROW = 4;
+	private static final int  NUMBER_OF_COLUMNS  = TABLECELLS_PER_ROW + 1;
+	private static int        numRows  = 16;
+	private static Object[][] data     = new Object[numRows][NUMBER_OF_COLUMNS];;
+	private static String[]   colNames = {"Address", "-0", "-1", "-2", "-3"};
 	private static JTable     table;
 	private static JPanel     panel;
+	private static JScrollPane scrollPane;
 
 	
 	protected StackVisualizer(String title, String heading) {
@@ -72,20 +76,28 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		 * 0x7FFFEFFB, 0x7FFFEFFA, 0x7FFFEFF9, 0x7FFFEFF8 or in decimal value:
 		 * 2147479547, 2147479546, 2147479545, 2147479544.
 		 */
-		for (int i = 0, addr = spAddr-1; i < memRange; i++)
+		for (int row = 0, addr = SP_INIT_ADDR-1; row < numRows; row++)
 		{
-			data[i][0] = "0x" + hex(addr);
+			data[row][0] = "0x" + hex(addr);
 			try {
-				for (int j = 1; j <= 4; j++) {
+				/* 
+				 * memInstance.getRawWord(addr-3);
+				 * TODO Use in order to display whole word in a table cell. 
+				 */
+				for (int j = 1; j < NUMBER_OF_COLUMNS; j++) {
+					/*
+					 * Endianness determines whether byte position in value and
+					 * byte position in memory match.
+					 */
 					col = (endianness == Memory.LITTLE_ENDIAN) ? j : 5-j;
 //					System.out.println("(" + i + "," + j + ") - " 
 //							+ addr +": " + memInstance.getByte(addr));
-//					System.out.println("(" + i + "," + j + ") - " 
+//					System.out.println("(" + i + "," + col + ") - " 
 //							+ addr +": " + hex(memInstance.getByte(addr)));
-					data[i][col] = hex(memInstance.getByte(addr--));
+					data[row][col] = hex(memInstance.getByte(addr--));
 				}
-				System.out.println(data[i][0] + ": " + data[i][1] + "," +
-						data[i][2] + "," + data[i][3] + "," + data[i][4]);
+				System.out.println(data[row][0] + ": " + data[row][1] + "," +
+						data[row][2] + "," + data[row][3] + "," + data[row][4]);
 /*				System.out.println(data[i][0] + ": " + hex((int)data[i][1]) + ","
 						+ hex((int)data[i][2]) + "," + hex((int)data[i][3]) + ","
 						+ hex((int)data[i][4]));*/
@@ -93,12 +105,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				aee.printStackTrace();
 			}
 		}
-		if (table != null)
-			panel.remove(table);
+		if (scrollPane != null)
+			panel.remove(scrollPane);
 		table = new JTable(data, colNames);
 		table.setEnabled(false);
-		panel.add(table);
-		table.revalidate();
+		scrollPane = new JScrollPane(table);
+		panel.add(scrollPane);
+		panel.revalidate();
 		System.out.println("getStackData end\n");
 	}
 	
