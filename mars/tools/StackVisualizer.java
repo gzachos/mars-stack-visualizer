@@ -8,6 +8,7 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.table.DefaultTableModel;
 
 import mars.mips.hardware.AccessNotice;
 import mars.mips.hardware.AddressErrorException;
@@ -28,14 +29,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static Memory    memInstance  = Memory.getInstance();
 	private static boolean   endianness   = memInstance.getByteOrder();
 	
-	private static int        TABLECELLS_PER_ROW = 4;
-	private static final int  NUMBER_OF_COLUMNS  = TABLECELLS_PER_ROW + 1;
-	private static int        numRows  = 16;
-	private static Object[][] data     = new Object[numRows][NUMBER_OF_COLUMNS];;
-	private static String[]   colNames = {"Address", "-0", "-1", "-2", "-3"};
-	private static JTable     table;
-	private static JPanel     panel;
+	private static int         TABLECELLS_PER_ROW = 4;
+	private static final int   NUMBER_OF_COLUMNS  = TABLECELLS_PER_ROW + 1;
+	private static int         numRows  = 16;
+	private static Object[][]  data     = new Object[numRows][NUMBER_OF_COLUMNS];;
+	private static String[]    colNames = {"Address", "-0", "-1", "-2", "-3"};
+	private static JTable      table;
+	private static JPanel      panel;
 	private static JScrollPane scrollPane;
+	private static DefaultTableModel tableModel;
 
 	
 	protected StackVisualizer(String title, String heading) {
@@ -55,6 +57,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	protected JComponent buildMainDisplayArea() {
 		panel = new JPanel(new GridBagLayout());
 		panel.setPreferredSize(new Dimension(600, 650));
+		table = new JTable(new DefaultTableModel());
+		table.setEnabled(false);
+		tableModel = (DefaultTableModel) table.getModel();
+		scrollPane = new JScrollPane(table);
+		panel.add(scrollPane);
 		getStackData();
 		return panel;
 	}
@@ -105,13 +112,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				aee.printStackTrace();
 			}
 		}
-		if (scrollPane != null)
-			panel.remove(scrollPane);
-		table = new JTable(data, colNames);
-		table.setEnabled(false);
-		scrollPane = new JScrollPane(table);
-		panel.add(scrollPane);
-		panel.revalidate();
+		tableModel.setDataVector(data, colNames);
+		tableModel.fireTableDataChanged();
 		System.out.println("getStackData end\n");
 	}
 	
