@@ -5,9 +5,11 @@ import java.awt.GridBagLayout;
 import java.util.Observable;
 
 import javax.swing.JComponent;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTextField;
 import javax.swing.table.DefaultTableModel;
 
 import mars.mips.hardware.AccessNotice;
@@ -38,7 +40,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static JPanel      panel;
 	private static JScrollPane scrollPane;
 	private static DefaultTableModel tableModel;
-
+	private static JTextField  spField;
 	
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
@@ -57,6 +59,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	protected JComponent buildMainDisplayArea() {
 		panel = new JPanel(new GridBagLayout());
 		panel.setPreferredSize(new Dimension(600, 650));
+		spField = new JTextField("Stack Pointer Value", 10);
+		spField.setEditable(false);
+		panel.add(spField);
 		table = new JTable(new DefaultTableModel());
 		table.setEnabled(false);
 		tableModel = (DefaultTableModel) table.getModel();
@@ -114,6 +119,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		}
 		tableModel.setDataVector(data, colNames);
 		tableModel.fireTableDataChanged();
+		// spField.setText(String.valueOf(getSpValue()));
+		spField.setText(hex(getSpValue()));
 		System.out.println("getStackData end\n");
 	}
 	
