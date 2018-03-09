@@ -5,21 +5,22 @@ import java.awt.GridBagLayout;
 import java.util.Observable;
 
 import javax.swing.JComponent;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.table.DefaultTableModel;
 
+import mars.ProgramStatement;
 import mars.mips.hardware.AccessNotice;
 import mars.mips.hardware.AddressErrorException;
 import mars.mips.hardware.Memory;
 import mars.mips.hardware.MemoryAccessNotice;
 import mars.mips.hardware.RegisterAccessNotice;
 import mars.mips.hardware.RegisterFile;
+import mars.mips.instructions.Instruction;
 
-@SuppressWarnings("serial")
+@SuppressWarnings({ "serial", "deprecation" })
 public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	private static String name    = "Stack Visualizer";
@@ -41,6 +42,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static JScrollPane scrollPane;
 	private static DefaultTableModel tableModel;
 	private static JTextField  spField;
+	private static final int   INSTRUCTION_LENGTH_BITS = Instruction.INSTRUCTION_LENGTH_BITS;
+	
+	private static String regNameToBeStoredInStack = null;
 	
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
@@ -102,9 +106,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					 * byte position in memory match.
 					 */
 					col = (endianness == Memory.LITTLE_ENDIAN) ? j : 5-j;
-//					System.out.println("(" + i + "," + j + ") - " 
+//					System.out.println("(" + i + "," + j + ") - "
 //							+ addr +": " + memInstance.getByte(addr));
-//					System.out.println("(" + i + "," + col + ") - " 
+//					System.out.println("(" + i + "," + col + ") - "
 //							+ addr +": " + hex(memInstance.getByte(addr)));
 					data[row][col] = hex(memInstance.getByte(addr--));
 				}
@@ -117,17 +121,19 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				aee.printStackTrace();
 			}
 		}
-		tableModel.setDataVector(data, colNames);
+		// TODO decide call sequence
+/*		tableModel.setDataVector(data, colNames);
 		tableModel.fireTableDataChanged();
 		// spField.setText(String.valueOf(getSpValue()));
 		spField.setText(hex(getSpValue()));
-		System.out.println("getStackData end\n");
+*/		System.out.println("getStackData end\n");
 	}
 	
 	@Override
 	protected void addAsObserver() {
 		addAsObserver(Memory.stackLimitAddress, Memory.stackBaseAddress);
 		addAsObserver(RegisterFile.getRegisters()[spRegNumber]);
+		addAsObserver(Memory.textBaseAddress, Memory.textLimitAddress);
 	}
 	
 	@Override
@@ -140,28 +146,82 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		
 		if (notice instanceof MemoryAccessNotice) {
 			MemoryAccessNotice m = (MemoryAccessNotice) notice;
-			if (m.getAccessType() == AccessNotice.READ)
-				return;
-			System.out.println("MemoryAccessNotice (" + 
-					((m.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
-					+ hex(m.getAddress()) + " value: " + m.getValue());
-			getStackData();
+			if (Memory.inTextSegment(m.getAddress()))
+				processTextMemoryUpdate(m);
+			else
+				processStackMemoryUpdate(m);
 		}
 		else if (notice instanceof RegisterAccessNotice) {
 			RegisterAccessNotice r = (RegisterAccessNotice) notice;
 			if (r.getAccessType() == AccessNotice.READ)
 				return;
-			System.out.println("RegisterAccessNotice (W): " + r.getRegisterName()
+			System.out.println("\nRegisterAccessNotice (W): " + r.getRegisterName()
 					+ " value: " + hex(getSpValue()));
 		}
 	}
+	
+	private void processStackMemoryUpdate(MemoryAccessNotice notice) {
+		if (notice.getAccessType() == AccessNotice.READ)
+			return;
+		String regName;
+		if (regNameToBeStoredInStack != null) {
+			regName = regNameToBeStoredInStack;
+			regNameToBeStoredInStack = null;
+		} else
+			regName = "";
+		System.out.println("\nStackAccessNotice (" + 
+				((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
+				+ hex(notice.getAddress()) + " value: " + notice.getValue() +
+				" (stored: " + regName + ")");
+		getStackData();
+	}
+	
+	private void processTextMemoryUpdate(MemoryAccessNotice notice) {
+		if (notice.getAccessType() == AccessNotice.WRITE)
+			return;
+		System.out.println("\nTextAccessNotice (" + 
+				((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
+				+ hex(notice.getAddress()) + " value: " + notice.getValue() /*+ " = "*/);
+		//printBin(notice.getValue());
+		try {
+			ProgramStatement stmnt =  memInstance.getStatementNoNotify(notice.getAddress());
+			Instruction instr = stmnt.getInstruction();
+			String instrName = instr.getName();
+			int[] operands;
+			if (isStoreInstruction(instrName)) {
+				System.out.println("stmnt: " + stmnt.getPrintableBasicAssemblyStatement());
+				operands = stmnt.getOperands();
+/*				for (int i = 0; i < operands.length; i++)
+					System.out.print(operands[i] + " ");
+				System.out.println();
+*/
+				regNameToBeStoredInStack = RegisterFile.getRegisters()[operands[0]].getName();
+			}
+		} catch (AddressErrorException e) {
+			e.printStackTrace();
+		}
+	}
 
+	private boolean isStoreInstruction(String instrName) {
+		if (instrName.equals("sw") || instrName.equals("sh") || instrName.equals("sc"))
+			return true;
+		return false;
+	}
+	
 	private String hex(int decimalValue) {
 		return Integer.toHexString(decimalValue);
 	}
 
 	private int getSpValue() {
 		return RegisterFile.getValue(spRegNumber);
+	}
+	
+	private void printBin(int num) {
+		int count = 0;
+		for (int i = count = 0; i < 32; i++, num <<= 1)
+			System.out.print((((num & 0x80000000) != 0) ? "1" : "0") +
+					((++count % 4 == 0) ? " " : ""));
+		System.out.print("\n");
 	}
 	
 }
