@@ -33,10 +33,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static boolean   endianness   = memInstance.getByteOrder();
 	
 	private static int         TABLECELLS_PER_ROW = 4;
-	private static final int   NUMBER_OF_COLUMNS  = TABLECELLS_PER_ROW + 1;
+	private static final int   NUMBER_OF_COLUMNS  = TABLECELLS_PER_ROW + 2;
 	private static int         numRows  = 16;
 	private static Object[][]  data     = new Object[numRows][NUMBER_OF_COLUMNS];;
-	private static String[]    colNames = {"Address", "-0", "-1", "-2", "-3"};
+	private static String[]    colNames = {"Address", "-0", "-1", "-2", "-3", "Reg"};
 	private static JTable      table;
 	private static JPanel      panel;
 	private static JScrollPane scrollPane;
@@ -100,12 +100,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				 * memInstance.getRawWord(addr-3);
 				 * TODO Use in order to display whole word in a table cell. 
 				 */
-				for (int j = 1; j < NUMBER_OF_COLUMNS; j++) {
+				for (int j = 1; j < (NUMBER_OF_COLUMNS-1); j++) {
 					/*
 					 * Endianness determines whether byte position in value and
 					 * byte position in memory match.
 					 */
-					col = (endianness == Memory.LITTLE_ENDIAN) ? j : 5-j;
+					col = (endianness == Memory.LITTLE_ENDIAN) ? j : (NUMBER_OF_COLUMNS-1)-j;
 //					System.out.println("(" + i + "," + j + ") - "
 //							+ addr +": " + memInstance.getByte(addr));
 //					System.out.println("(" + i + "," + col + ") - "
@@ -113,7 +113,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					data[row][col] = hex(memInstance.getByte(addr--));
 				}
 				System.out.println(data[row][0] + ": " + data[row][1] + "," +
-						data[row][2] + "," + data[row][3] + "," + data[row][4]);
+						data[row][2] + "," + data[row][3] + "," + data[row][4] +
+						" (" + data[row][5] + ")");
 /*				System.out.println(data[i][0] + ": " + hex((int)data[i][1]) + ","
 						+ hex((int)data[i][2]) + "," + hex((int)data[i][3]) + ","
 						+ hex((int)data[i][4]));*/
@@ -173,6 +174,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
 				+ hex(notice.getAddress()) + " value: " + notice.getValue() +
 				" (stored: " + regName + ")");
+		int row = ((SP_INIT_ADDR - notice.getAddress()) / 4)-1;
+		System.out.println(row);
+		data[row][5] = regName;
+		/* TODO
+		 * data[x][5] should be set to null between simulation runs!
+		 * How do we know a run is over?!?!
+		 */
 		getStackData();
 	}
 	
