@@ -84,6 +84,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 */
 	protected void getStackData() {
 		int col;
+		/*
+		 * TODO verify memory address arithmetic.
+		 * Take into account endianness and stack growth.
+		 */
 		System.out.println("getStackData start");
 		/*
 		 * Initial value of spAddr is 0x7FFFEFFC = 2147479548.
@@ -174,14 +178,27 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
 				+ hex(notice.getAddress()) + " value: " + notice.getValue() +
 				" (stored: " + regName + ")");
-		int row = ((SP_INIT_ADDR - notice.getAddress()) / 4)-1;
-		System.out.println(row);
+		int row = (upperFourFactor(SP_INIT_ADDR - notice.getAddress()) / 4)-1;
 		data[row][5] = regName;
 		/* TODO
 		 * data[x][5] should be set to null between simulation runs!
 		 * How do we know a run is over?!?!
 		 */
 		getStackData();
+	}
+	
+	private int upperFourFactor(int x) {
+		int remainder = x % 4;
+		return (x + remainder);
+	}
+	
+	/* TODO use in case stack growth takes place
+	 * from lower to upper addresses.
+	 */
+	@SuppressWarnings("unused")
+	private int lowerFourFactor(int x) {
+		int remainder = x % 4;
+		return (x - remainder);
 	}
 	
 	private void processTextMemoryUpdate(MemoryAccessNotice notice) {
