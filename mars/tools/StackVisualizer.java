@@ -110,18 +110,18 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					 * byte position in memory match.
 					 */
 					col = (endianness == Memory.LITTLE_ENDIAN) ? j : (NUMBER_OF_COLUMNS-1)-j;
-//					System.out.println("(" + i + "," + j + ") - "
+//					System.out.println("(" + row + "," + j + ") - "
 //							+ addr +": " + memInstance.getByte(addr));
-//					System.out.println("(" + i + "," + col + ") - "
+//					System.out.println("(" + row + "," + col + ") - "
 //							+ addr +": " + hex(memInstance.getByte(addr)));
 					data[row][col] = hex(memInstance.getByte(addr--));
 				}
 				System.out.println(data[row][0] + ": " + data[row][1] + "," +
 						data[row][2] + "," + data[row][3] + "," + data[row][4] +
 						" (" + data[row][5] + ")");
-/*				System.out.println(data[i][0] + ": " + hex((int)data[i][1]) + ","
-						+ hex((int)data[i][2]) + "," + hex((int)data[i][3]) + ","
-						+ hex((int)data[i][4]));*/
+/*				System.out.println(data[row][0] + ": " + hex((int)data[row][1]) + ","
+						+ hex((int)data[row][2]) + "," + hex((int)data[row][3]) + ","
+						+ hex((int)data[row][4]));*/
 			} catch (AddressErrorException aee) {
 				aee.printStackTrace();
 			}
@@ -161,7 +161,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			if (r.getAccessType() == AccessNotice.READ)
 				return;
 			System.out.println("\nRegisterAccessNotice (W): " + r.getRegisterName()
-					+ " value: " + hex(getSpValue()));
+					+ " value: " + getSpValue());
 		}
 	}
 	
@@ -176,9 +176,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			regName = "";
 		System.out.println("\nStackAccessNotice (" + 
 				((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
-				+ hex(notice.getAddress()) + " value: " + notice.getValue() +
+				+ notice.getAddress() + " value: " + notice.getValue() +
 				" (stored: " + regName + ")");
-		int row = (upperFourFactor(SP_INIT_ADDR - notice.getAddress()) / 4)-1;
+//		System.out.println((SP_INIT_ADDR - notice.getAddress()) + " " +
+//				Memory.alignToWordBoundary(SP_INIT_ADDR - notice.getAddress()));
+		int row = (Memory.alignToWordBoundary(SP_INIT_ADDR - notice.getAddress()) / 4)-1;
 		data[row][5] = regName;
 		/* TODO
 		 * data[x][5] should be set to null between simulation runs!
@@ -187,26 +189,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		getStackData();
 	}
 	
-	private int upperFourFactor(int x) {
-		int remainder = x % 4;
-		return (x + remainder);
-	}
-	
-	/* TODO use in case stack growth takes place
-	 * from lower to upper addresses.
-	 */
-	@SuppressWarnings("unused")
-	private int lowerFourFactor(int x) {
-		int remainder = x % 4;
-		return (x - remainder);
-	}
-	
 	private void processTextMemoryUpdate(MemoryAccessNotice notice) {
 		if (notice.getAccessType() == AccessNotice.WRITE)
 			return;
 		System.out.println("\nTextAccessNotice (" + 
 				((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
-				+ hex(notice.getAddress()) + " value: " + notice.getValue() /*+ " = "*/);
+				+ notice.getAddress() + " value: " + notice.getValue() /*+ " = "*/);
 		//printBin(notice.getValue());
 		try {
 			ProgramStatement stmnt =  memInstance.getStatementNoNotify(notice.getAddress());
@@ -228,7 +216,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	private boolean isStoreInstruction(String instrName) {
-		if (instrName.equals("sw") || instrName.equals("sh") || instrName.equals("sc"))
+		if (instrName.equals("sw") || instrName.equals("sh") ||
+				instrName.equals("sc") || instrName.equals("sb"))
 			return true;
 		return false;
 	}
