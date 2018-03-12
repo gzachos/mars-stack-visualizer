@@ -43,6 +43,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static DefaultTableModel tableModel;
 	private static JTextField  spField;
 	private static final int   INSTRUCTION_LENGTH_BITS = Instruction.INSTRUCTION_LENGTH_BITS;
+	private static final int   STORED_REG_COL = 5;
 	
 	private static String regNameToBeStoredInStack = null;
 	
@@ -181,11 +182,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 //		System.out.println((SP_INIT_ADDR - notice.getAddress()) + " " +
 //				Memory.alignToWordBoundary(SP_INIT_ADDR - notice.getAddress()));
 		int row = (Memory.alignToWordBoundary(SP_INIT_ADDR - notice.getAddress()) / 4)-1;
-		data[row][5] = regName;
-		/* TODO
-		 * data[x][5] should be set to null between simulation runs!
-		 * How do we know a run is over?!?!
-		 */
+		data[row][STORED_REG_COL] = regName;
 		getStackData();
 	}
 	
@@ -236,6 +233,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			System.out.print((((num & 0x80000000) != 0) ? "1" : "0") +
 					((++count % 4 == 0) ? " " : ""));
 		System.out.print("\n");
+	}
+	
+	@Override
+	protected void reset() {
+		/* Reset the column holding the register name whose contents
+		 * were stored in the corresponding memory address.
+		 */
+		for (int i = 0; i < data.length; i++)
+			data[i][STORED_REG_COL] = null;
 	}
 	
 }
