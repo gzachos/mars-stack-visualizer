@@ -27,25 +27,41 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static String version = "Version 0.1 (George Z. Zachos, Petros Manousis)";
 	private static String heading = "Visualizing stack modification operations";
 
+	private static boolean displayDataPerByte = false;
+
+	/*
+	 * Memory.stackBaseAddress:  word-aligned
+	 * Memory.stackLimitAddress: word-aligned
+	 * Max stack address value:  Memory.stackBaseAddress + (WORD_LENGTH_BYTES-1)
+	 * Min stack address value:  Memory.stackLimitAddress
+	 *
+	 * Stack grows towards lower addresses: .stackBaseAddress > .stackLimitAddress
+	 * Word-length operations can take place in both .stackBaseAddress and .stackLimitAddress
+	 */
 	private static final int SP_REG_NUMBER = RegisterFile.STACK_POINTER_REGISTER;
 	private static final int SP_INIT_ADDR  = Memory.stackPointer;
 	private static Memory    memInstance   = Memory.getInstance();
 	private static boolean   endianness    = memInstance.getByteOrder();
 	private static final boolean LITTLE_ENDIAN = Memory.LITTLE_ENDIAN;
-	
+
 	private static final int   WORD_LENGTH_BYTES        = Memory.WORD_LENGTH_BYTES;
 	private static final int   WORD_LENGTH_BITS         = WORD_LENGTH_BYTES * 8;
 	// data[][] related fields
-	private static final int   NUMBER_OF_COLUMNS        = WORD_LENGTH_BYTES + 2;
+	private static final int   NUMBER_OF_COLUMNS        = WORD_LENGTH_BYTES + 2; // +1 for address
+	                                                                             // +1 for register name stored
 	private static final int   ADDRESS_COLUMN           = 0; // Should always be in first column.
 	private static final int   FIRST_BYTE_COLUMN        = 1; // Should always be in second column.
 	private static final int   LAST_BYTE_COLUMN         = FIRST_BYTE_COLUMN + WORD_LENGTH_BYTES - 1;
 	private static final int   STORED_REGISTER_COLUMN   = LAST_BYTE_COLUMN + 1;
 	private static final int   RS_OPERAND_LIST_INDEX    = 0;
 	private static int         numRows                  = 16; // TODO make generic
+	private static final int   MAX_SP_VALUE             = Memory.stackBaseAddress + (WORD_LENGTH_BYTES-1);
+	private static int         maxSpValue               = SP_INIT_ADDR - 1;
+	private static int         maxSpValueWordAligned    = SP_INIT_ADDR - WORD_LENGTH_BYTES;
+	private static int         minSpValue               = MAX_SP_VALUE;
 	private static Object[][]  data                     = new Object[numRows][NUMBER_OF_COLUMNS];
 	private static String      regNameToBeStoredInStack = null;
-	
+
 	// GUI-Related fields
 	@SuppressWarnings("unused")
 	private static String[]    colNames = {"Address", "-0", "-1", "-2", "-3", "Reg"};
@@ -55,8 +71,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	@SuppressWarnings("unused")
 	private static DefaultTableModel tableModel;
 	private static JTextField  spField;
-	
-	
+
+
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
 	}
@@ -95,31 +111,29 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 */
 	protected void getStackData() {
 		int col;
-		/*
-		 * TODO verify memory address arithmetic.
-		 * Take into account endianness and stack growth.
-		 */
+
 		System.out.println("getStackData start");
 		/*
-		 * Initial value of spAddr is 0x7FFFEFFC = 2147479548.
+		 * Initial value of spAddr is 0x7FFFEFFC = 2147479548 (Default MIPS memory configuration).
 		 * We ignore the word starting @0x7FFFEFFC, hence the
 		 * first 4 bytes (1 word) to be displayed are:
 		 * 0x7FFFEFFB, 0x7FFFEFFA, 0x7FFFEFF9, 0x7FFFEFF8 or in decimal value:
 		 * 2147479547, 2147479546, 2147479545, 2147479544.
 		 */
-		for (int row = 0, addr = SP_INIT_ADDR-1; row < numRows; row++)
+		for (int row = 0, addr = maxSpValue; row < numRows; row++)
 		{
 			data[row][ADDRESS_COLUMN] = "0x" + hex(addr);
 			try {
-				// TODO Allow whole word or per byte data display. 
+				// TODO Allow 'whole word' or 'per byte' data display.
 				for (int j = FIRST_BYTE_COLUMN; j <= LAST_BYTE_COLUMN; j++) {
 					/*
 					 * Endianness determines whether byte position in value and
 					 * byte position in memory match.
 					 */
 					col = (endianness == LITTLE_ENDIAN) ? j : (LAST_BYTE_COLUMN-j) + FIRST_BYTE_COLUMN;
-					System.out.println("(" + row + "," + col + ") - "
-							+ addr +": " + hex(memInstance.getByte(addr)));
+					if (displayDataPerByte)
+						System.out.println("(" + row + "," + col + ") - "
+								+ addr +": " + hex(memInstance.getByte(addr)));
 					data[row][col] = hex(memInstance.getByte(addr--));
 				}
 				System.out.print(data[row][0] + ": ");
@@ -137,14 +151,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		spField.setText(hex(getSpValue()));
 */		System.out.println("getStackData end\n");
 	}
-	
+
 	@Override
 	protected void addAsObserver() {
 		addAsObserver(Memory.stackLimitAddress, Memory.stackBaseAddress);
 		addAsObserver(RegisterFile.getRegisters()[SP_REG_NUMBER]);
 		addAsObserver(Memory.textBaseAddress, Memory.textLimitAddress);
 	}
-	
+
 	@Override
 	protected void processMIPSUpdate(Observable resource, AccessNotice notice) {
 
@@ -152,7 +166,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 		if (!notice.accessIsFromMIPS())
 			return;
-		
+
 		if (notice instanceof MemoryAccessNotice) {
 			MemoryAccessNotice m = (MemoryAccessNotice) notice;
 			if (Memory.inTextSegment(m.getAddress()))
@@ -161,38 +175,42 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				processStackMemoryUpdate(m);
 		}
 		else if (notice instanceof RegisterAccessNotice) {
+			// Currently only $sp is observed
 			RegisterAccessNotice r = (RegisterAccessNotice) notice;
 			if (r.getAccessType() == AccessNotice.READ)
 				return;
 			System.out.println("\nRegisterAccessNotice (W): " + r.getRegisterName()
 					+ " value: " + getSpValue());
+			if (r.getRegisterName().equals("$sp"))
+				if (minSpValue > getSpValue())
+					minSpValue = getSpValue();
 		}
 	}
-	
+
 	private void processStackMemoryUpdate(MemoryAccessNotice notice) {
+		String regName;
+
 		if (notice.getAccessType() == AccessNotice.READ)
 			return;
-		String regName;
+
 		if (regNameToBeStoredInStack != null) {
 			regName = regNameToBeStoredInStack;
 			regNameToBeStoredInStack = null;
 		} else
 			regName = "";
-		System.out.println("\nStackAccessNotice (" + 
+		System.out.println("\nStackAccessNotice (" +
 				((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
 				+ notice.getAddress() + " value: " + notice.getValue() +
 				" (stored: " + regName + ")");
-//		System.out.println((SP_INIT_ADDR - notice.getAddress()) + " " +
-//				Memory.alignToWordBoundary(SP_INIT_ADDR - notice.getAddress()));
-		int row = (Memory.alignToWordBoundary(SP_INIT_ADDR - notice.getAddress()) / WORD_LENGTH_BYTES)-1;
+		int row = (maxSpValueWordAligned - alignToCurrentWordBoundary(notice.getAddress())) / WORD_LENGTH_BYTES;
 		data[row][STORED_REGISTER_COLUMN] = regName;
 		getStackData();
 	}
-	
+
 	private void processTextMemoryUpdate(MemoryAccessNotice notice) {
 		if (notice.getAccessType() == AccessNotice.WRITE)
 			return;
-		System.out.println("\nTextAccessNotice (" + 
+		System.out.println("\nTextAccessNotice (" +
 				((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
 				+ notice.getAddress() + " value: " + notice.getValue() /*+ " = "*/);
 		//printBin(notice.getValue());
@@ -220,7 +238,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			return true;
 		return false;
 	}
-	
+
 	private String hex(int decimalValue) {
 		return Integer.toHexString(decimalValue);
 	}
@@ -228,7 +246,21 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private int getSpValue() {
 		return RegisterFile.getValue(SP_REG_NUMBER);
 	}
-	
+
+	/**
+	 * Utility method to align given address to current full word boundary,
+	 * if not already aligned.
+	 *
+	 * @param address
+	 *            a memory address (any int value is potentially valid)
+	 * @return address aligned to current word boundary (divisible by 4)
+	 */
+	private int alignToCurrentWordBoundary(int address) {
+		if (Memory.wordAligned(address))
+			return address;
+		return (Memory.alignToWordBoundary(address) - WORD_LENGTH_BYTES);
+	}
+
 	@SuppressWarnings("unused")
 	private void printBin(int num) {
 		int count = 0;
@@ -237,7 +269,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					((++count % 4 == 0) ? " " : ""));
 		System.out.print("\n");
 	}
-	
+
 	@Override
 	protected void reset() {
 		/* Reset the column holding the register name whose contents
@@ -246,5 +278,5 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		for (int i = 0; i < data.length; i++)
 			data[i][STORED_REGISTER_COLUMN] = null;
 	}
-	
+
 }
