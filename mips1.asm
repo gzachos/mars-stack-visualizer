@@ -36,7 +36,8 @@ main:
 	addi	$sp, $sp, -24
 	sw	$t3, 0($sp)
 	addi	$sp, $sp, 24
-	
+
+hello:	
 	addi	$sp, $sp, -28
 	sb	$t3, 2($sp)
 	addi	$sp, $sp, 28
