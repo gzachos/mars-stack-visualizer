@@ -2,6 +2,9 @@ package mars.tools;
 
 import java.awt.Dimension;
 import java.awt.GridBagLayout;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.util.ArrayList;
 import java.util.Observable;
 
 import javax.swing.JComponent;
@@ -11,7 +14,9 @@ import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.table.DefaultTableModel;
 
+import mars.Globals;
 import mars.ProgramStatement;
+import mars.assembler.Symbol;
 import mars.mips.hardware.AccessNotice;
 import mars.mips.hardware.AddressErrorException;
 import mars.mips.hardware.Memory;
@@ -72,6 +77,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static DefaultTableModel tableModel;
 	private static JTextField  spField;
 
+	private static ArrayList<?> textSymbols = null; // TODO verify generics
 
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
@@ -98,8 +104,19 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		tableModel = (DefaultTableModel) table.getModel();
 		scrollPane = new JScrollPane(table);
 		panel.add(scrollPane);
-		getStackData();
 		return panel;
+	}
+
+	@Override
+	protected void initializePreGUI() {
+		// TODO verify Listener
+		Globals.getGui().getRunAssembleAction().addPropertyChangeListener(new PropertyChangeListener() {
+			@Override
+			public void propertyChange(PropertyChangeEvent evt) {
+				textSymbols = null;
+			}
+		});
+		getStackData();
 	}
 
 	/*
@@ -159,6 +176,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		addAsObserver(Memory.textBaseAddress, Memory.textLimitAddress);
 	}
 
+
 	@Override
 	protected void processMIPSUpdate(Observable resource, AccessNotice notice) {
 
@@ -166,6 +184,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 		if (!notice.accessIsFromMIPS())
 			return;
+
+		if (textSymbols == null) { // TODO fire after assemble
+			textSymbols = Globals.program.getLocalSymbolTable().getTextSymbols();
+			//System.out.println(textSymbols.toString() + " " + textSymbols.size());
+			for (int i = 0; i < textSymbols.size(); i++) {
+				Symbol s = (Symbol) textSymbols.get(i);
+				System.out.println(s.getName() + " - " + s.getAddress());
+			}
+		}
 
 		if (notice instanceof MemoryAccessNotice) {
 			MemoryAccessNotice m = (MemoryAccessNotice) notice;
@@ -220,11 +247,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			String instrName = instr.getName();
 			int[] operands;
 			if (isStoreInstruction(instrName)) {
-//				System.out.println("Statemtnt TBE: " + stmnt.getPrintableBasicAssemblyStatement());
+				System.out.println("Statemtnt TBE: " + stmnt.getPrintableBasicAssemblyStatement());
+
 				operands = stmnt.getOperands();
-/*				for (int i = 0; i < operands.length; i++)
+	/*			for (int i = 0; i < operands.length; i++)
 					System.out.print(operands[i] + " ");
-				System.out.println(); */
+				System.out.println();
+	*/
 				regNameToBeStoredInStack = RegisterFile.getRegisters()[operands[RS_OPERAND_LIST_INDEX]].getName();
 			}
 		} catch (AddressErrorException e) {
@@ -277,6 +306,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		 */
 		for (int i = 0; i < data.length; i++)
 			data[i][STORED_REGISTER_COLUMN] = null;
+		textSymbols = null; // TODO verify usage
 	}
 
 }
