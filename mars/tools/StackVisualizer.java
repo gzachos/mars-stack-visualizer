@@ -21,6 +21,7 @@ import mars.mips.hardware.AccessNotice;
 import mars.mips.hardware.AddressErrorException;
 import mars.mips.hardware.Memory;
 import mars.mips.hardware.MemoryAccessNotice;
+import mars.mips.hardware.Register;
 import mars.mips.hardware.RegisterAccessNotice;
 import mars.mips.hardware.RegisterFile;
 import mars.mips.instructions.Instruction;
@@ -78,7 +79,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static JTextField  spField;
 
 	private static ArrayList<?> textSymbols = null; // TODO verify generics
+	private static ArrayList<Integer> jumpAddresses = new ArrayList<Integer>();
 
+	private static boolean debug = false;
+	
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
 	}
@@ -113,9 +117,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		Globals.getGui().getRunAssembleAction().addPropertyChangeListener(new PropertyChangeListener() {
 			@Override
 			public void propertyChange(PropertyChangeEvent evt) {
+				System.out.flush();
+				System.err.println("RunAssembleAction");
+				System.err.flush();
 				textSymbols = null;
+				// jumpAddresses.clear(); // TODO NOT do this
 			}
 		});
+		// TODO disable "Undo the last step" button or somehow use BackStepper
+		// TODO remove PropertyChangeListener above to a more proper Listener
 		getStackData();
 	}
 
@@ -180,10 +190,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	@Override
 	protected void processMIPSUpdate(Observable resource, AccessNotice notice) {
 
-//		System.out.println(notice.accessIsFromMIPS() +" " + notice.accessIsFromGUI());
-
-		if (!notice.accessIsFromMIPS())
-			return;
+		// System.out.println(notice.accessIsFromMIPS() +" " + notice.accessIsFromGUI());
 
 		if (textSymbols == null) { // TODO fire after assemble
 			textSymbols = Globals.program.getLocalSymbolTable().getTextSymbols();
@@ -193,6 +200,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				System.out.println(s.getName() + " - " + s.getAddress());
 			}
 		}
+
+		if (!notice.accessIsFromMIPS())
+			return;
 
 		if (notice instanceof MemoryAccessNotice) {
 			MemoryAccessNotice m = (MemoryAccessNotice) notice;
@@ -206,8 +216,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			RegisterAccessNotice r = (RegisterAccessNotice) notice;
 			if (r.getAccessType() == AccessNotice.READ)
 				return;
-			System.out.println("\nRegisterAccessNotice (W): " + r.getRegisterName()
-					+ " value: " + getSpValue());
+			if (debug)
+				System.out.println("\nRegisterAccessNotice (W): " + r.getRegisterName()
+						+ " value: " + getSpValue());
 			if (r.getRegisterName().equals("$sp"))
 				if (minSpValue > getSpValue())
 					minSpValue = getSpValue();
@@ -225,10 +236,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			regNameToBeStoredInStack = null;
 		} else
 			regName = "";
-		System.out.println("\nStackAccessNotice (" +
-				((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
-				+ notice.getAddress() + " value: " + notice.getValue() +
-				" (stored: " + regName + ")");
+		if (debug) {
+			System.out.println("\nStackAccessNotice (" +
+					((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
+					+ notice.getAddress() + " value: " + notice.getValue() +
+					" (stored: " + regName + ")");
+		}
 		int row = (maxSpValueWordAligned - alignToCurrentWordBoundary(notice.getAddress())) / WORD_LENGTH_BYTES;
 		data[row][STORED_REGISTER_COLUMN] = regName;
 		getStackData();
@@ -237,17 +250,20 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private void processTextMemoryUpdate(MemoryAccessNotice notice) {
 		if (notice.getAccessType() == AccessNotice.WRITE)
 			return;
-		System.out.println("\nTextAccessNotice (" +
-				((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
-				+ notice.getAddress() + " value: " + notice.getValue() /*+ " = "*/);
-		//printBin(notice.getValue());
+		if (debug) {
+			System.out.println("\nTextAccessNotice (" +
+					((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
+					+ notice.getAddress() + " value: " + notice.getValue() /*+ " = "*/);
+		}
+		// printBin(notice.getValue());
 		try {
 			ProgramStatement stmnt =  memInstance.getStatementNoNotify(notice.getAddress());
 			Instruction instr = stmnt.getInstruction();
 			String instrName = instr.getName();
 			int[] operands;
 			if (isStoreInstruction(instrName)) {
-				System.out.println("Statemtnt TBE: " + stmnt.getPrintableBasicAssemblyStatement());
+				if (debug)
+					System.out.println("Statement TBE: " + stmnt.getPrintableBasicAssemblyStatement());
 
 				operands = stmnt.getOperands();
 	/*			for (int i = 0; i < operands.length; i++)
@@ -255,6 +271,37 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				System.out.println();
 	*/
 				regNameToBeStoredInStack = RegisterFile.getRegisters()[operands[RS_OPERAND_LIST_INDEX]].getName();
+			}
+			else if (isJumpInstruction(instrName) || isJumpAndLinkInstruction(instrName)) {
+				int targetAdrress = stmnt.getOperand(0)*4;
+				String targetLabel = addrToTextSymbol(targetAdrress);
+				if (isJumpAndLinkInstruction(instrName))
+					jumpAddresses.add(stmnt.getAddress());
+				if (targetLabel != null) {
+					System.out.print("Jumping to: " + targetLabel);
+					if (isJumpAndLinkInstruction(instrName))
+						System.out.println(" (" + (jumpAddresses.size()) + ")");
+				}
+			}
+			else if (isJumpRegInstruction(instrName)) {
+				int targetRegister = stmnt.getOperand(0);
+				Register reg = RegisterFile.getRegisters()[targetRegister];
+				int targetAddress = reg.getValue();
+				ProgramStatement callerStatement =  memInstance.getStatementNoNotify(targetAddress-4);
+				System.out.println("Returning from: " + addrToTextSymbol(callerStatement.getOperand(0)*4) +
+						" (" +jumpAddresses.size() + ") to line: " + callerStatement.getSourceLine());
+			//	System.out.println(jumpAddresses.get(jumpAddresses.size()-1) + " == " + callerStatement.getAddress());
+			//	for (int i = 0; i< jumpAddresses.size(); i++)
+			//		System.out.println((i+1) + ": " + jumpAddresses.get(i));
+
+				try {
+					if (jumpAddresses.remove(jumpAddresses.size()-1) != callerStatement.getAddress())
+						System.out.println("Mismatching return address");
+				} catch (IndexOutOfBoundsException e) {
+					// FIXME Exception thrown whenever function calling steps are undone
+					// and the program is again executed. undo last step is not supported
+					e.printStackTrace();
+				}
 			}
 		} catch (AddressErrorException e) {
 			e.printStackTrace();
@@ -266,6 +313,32 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				instrName.equals("sc") || instrName.equals("sb"))
 			return true;
 		return false;
+	}
+
+	private boolean isJumpInstruction(String instrName) {
+		return (instrName.equals("j"));
+	}
+
+	private boolean isJumpAndLinkInstruction(String instrName) {
+		return (instrName.equals("jal"));
+	}
+
+	private boolean isJumpRegInstruction(String instrName) {
+		return (instrName.equals("jr"));
+	}
+
+	private String addrToTextSymbol(int addr) {
+		if (textSymbols == null) {
+			// textSymbols = Globals.program.getLocalSymbolTable().getTextSymbols(); // no return in this case
+			return null;
+		}
+
+		for (int i = 0; i < textSymbols.size(); i++) {
+			Symbol s = (Symbol) textSymbols.get(i);
+			if (s.getAddress() == addr)
+				return s.getName();
+		}
+		return null;
 	}
 
 	private String hex(int decimalValue) {
@@ -301,12 +374,16 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	@Override
 	protected void reset() {
+		System.out.flush();
+		System.err.println("ResetAction");
+		System.err.flush();
 		/* Reset the column holding the register name whose contents
 		 * were stored in the corresponding memory address.
 		 */
 		for (int i = 0; i < data.length; i++)
 			data[i][STORED_REGISTER_COLUMN] = null;
 		textSymbols = null; // TODO verify usage
+		jumpAddresses.clear(); // TODO verify
 	}
 
 }
