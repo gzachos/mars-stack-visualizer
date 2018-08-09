@@ -1131,6 +1131,18 @@ public class VenusUI extends JFrame {
 		return runAssembleAction;
 	}
 
+	public JButton getRunButton() {
+		return Run;
+	}
+
+	public JButton getAssembleButton() {
+		return Assemble;
+	}
+
+	public JButton getStepButton() {
+		return Step;
+	}
+
 	/**
 	 * Have the menu request keyboard focus. DPS 5-4-10
 	 */

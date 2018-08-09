@@ -2,6 +2,8 @@ package mars.tools;
 
 import java.awt.Dimension;
 import java.awt.GridBagLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
@@ -25,6 +27,8 @@ import mars.mips.hardware.Register;
 import mars.mips.hardware.RegisterAccessNotice;
 import mars.mips.hardware.RegisterFile;
 import mars.mips.instructions.Instruction;
+import mars.simulator.BackStepper;
+import mars.venus.VenusUI;
 
 @SuppressWarnings({ "serial", "deprecation" })
 public class StackVisualizer extends AbstractMarsToolAndApplication {
@@ -48,6 +52,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int SP_INIT_ADDR  = Memory.stackPointer;
 	private static Memory    memInstance   = Memory.getInstance();
 	private static boolean   endianness    = memInstance.getByteOrder();
+	private static VenusUI   marsGui       = Globals.getGui();
 	private static final boolean LITTLE_ENDIAN = Memory.LITTLE_ENDIAN;
 
 	private static final int   WORD_LENGTH_BYTES        = Memory.WORD_LENGTH_BYTES;
@@ -80,9 +85,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	private static ArrayList<?> textSymbols = null; // TODO verify generics
 	private static ArrayList<Integer> jumpAddresses = new ArrayList<Integer>();
+	private static boolean disabledBackStep = false;
 
 	private static boolean debug = false;
-	
+
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
 	}
@@ -113,20 +119,55 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	@Override
 	protected void initializePreGUI() {
-		// TODO verify Listener
-		Globals.getGui().getRunAssembleAction().addPropertyChangeListener(new PropertyChangeListener() {
+
+		marsGui.getAssembleButton().addActionListener(new ActionListener() {
+
 			@Override
-			public void propertyChange(PropertyChangeEvent evt) {
+			public void actionPerformed(ActionEvent e) {
 				System.out.flush();
-				System.err.println("RunAssembleAction");
+				System.err.println("Assemble");
 				System.err.flush();
 				textSymbols = null;
-				// jumpAddresses.clear(); // TODO NOT do this
+				disableBackStepper(); // Not enough to work
+				jumpAddresses.clear();
+				/* Reset the column holding the register name whose contents
+				 * were stored in the corresponding memory address.
+				 */
+				for (int i = 0; i < data.length; i++)
+					data[i][STORED_REGISTER_COLUMN] = null;
 			}
 		});
+
+		marsGui.getRunButton().addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				disableBackStepper();
+			}
+		});
+
+		marsGui.getStepButton().addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				disableBackStepper();
+			}
+		});
+
 		// TODO disable "Undo the last step" button or somehow use BackStepper
-		// TODO remove PropertyChangeListener above to a more proper Listener
 		getStackData();
+	}
+
+	@Override
+	protected void initializePostGUI() {
+		connectButton.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (connectButton.isConnected()) {
+					restoreBackStepper(); // TODO We really need this?
+					disabledBackStep = false;
+				}
+			}
+		});
 	}
 
 	/*
@@ -349,6 +390,34 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		return RegisterFile.getValue(SP_REG_NUMBER);
 	}
 
+	private boolean disableBackStepper() {
+		BackStepper bs = Globals.program.getBackStepper();
+		if (!isObserving() || bs == null)
+			return false;
+		if (bs.enabled()) {
+			System.err.println("disabled backStepper");
+			bs.setEnabled(false);
+			disabledBackStep = true;
+		}
+		return true;
+	}
+
+	public void restoreBackStepper() {
+		System.err.println("dsbs: " + disabledBackStep);
+		if (disabledBackStep) {
+			BackStepper bs = Globals.program.getBackStepper();
+			if (bs != null) {
+				System.err.println("enabled backStepper");
+				bs.setEnabled(true);
+			}
+		}
+	}
+
+	@Override
+	protected void performSpecialClosingDuties() {
+		disabledBackStep = false;
+	}
+
 	/**
 	 * Utility method to align given address to current full word boundary,
 	 * if not already aligned.
@@ -377,13 +446,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		System.out.flush();
 		System.err.println("ResetAction");
 		System.err.flush();
-		/* Reset the column holding the register name whose contents
-		 * were stored in the corresponding memory address.
-		 */
-		for (int i = 0; i < data.length; i++)
-			data[i][STORED_REGISTER_COLUMN] = null;
-		textSymbols = null; // TODO verify usage
-		jumpAddresses.clear(); // TODO verify
+		// TODO Do we really need it?
 	}
 
 }
