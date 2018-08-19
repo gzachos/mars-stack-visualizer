@@ -133,6 +133,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				 */
 				for (int i = 0; i < data.length; i++)
 					data[i][STORED_REGISTER_COLUMN] = null;
+
+				// TODO verify
+				marsGui.getRunButton().setEnabled(true);
+				marsGui.getStepButton().setEnabled(true);
 			}
 		});
 
@@ -150,7 +154,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			}
 		});
 
-		// TODO disable "Undo the last step" button or somehow use BackStepper
 		getStackData();
 	}
 
@@ -163,6 +166,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				if (connectButton.isConnected()) {
 					restoreBackStepper(); // TODO We really need this?
 					disabledBackStep = false;
+				} else {
+					// TODO verify
+					/*
+					 * User program should be recompiled (and executed) after
+					 * StackVisualizer is launched. This is required for
+					 * coherently storing the subroutine call stack.
+					 */
+					marsGui.getRunButton().setEnabled(false);
+					marsGui.getStepButton().setEnabled(false);
 				}
 			}
 		});
