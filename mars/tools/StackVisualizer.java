@@ -1,18 +1,25 @@
 package mars.tools;
 
+import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.Observable;
+import java.util.Random;
 
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.ScrollPaneConstants;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+
+import com.sun.media.sound.ModelDestination;
 
 import mars.Globals;
 import mars.ProgramStatement;
@@ -27,6 +34,7 @@ import mars.mips.hardware.RegisterFile;
 import mars.mips.instructions.Instruction;
 import mars.simulator.BackStepper;
 import mars.venus.VenusUI;
+import sun.rmi.runtime.NewThreadAction;
 
 @SuppressWarnings({ "serial", "deprecation" })
 public class StackVisualizer extends AbstractMarsToolAndApplication {
@@ -74,18 +82,19 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	// GUI-Related fields
 	@SuppressWarnings("unused")
 	private static String[]    colNames = {"Address", "-0", "-1", "-2", "-3", "Reg"};
-	private static JTable      table;
-	private static JPanel      panel;
-	private static JScrollPane scrollPane;
+	private JTable      table;
+	private JPanel      panel;
+	private JScrollPane scrollPane;
+	private int spDataIndex = 0;	// FIXME: you have to set a value during runtime
 	@SuppressWarnings("unused")
-	private static DefaultTableModel tableModel;
+	private DefaultTableModel tableModel;
 	private static JTextField  spField;
 
 	private static ArrayList<?> textSymbols = null; // TODO verify generics
 	private static ArrayList<Integer> jumpAddresses = new ArrayList<Integer>();
 	private static boolean disabledBackStep = false;
 
-	private static boolean debug = false;
+	private static boolean debug = true;
 
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
@@ -107,10 +116,28 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		spField = new JTextField("Stack Pointer Value", 10);
 		spField.setEditable(false);
 		panel.add(spField);
-		table = new JTable(new DefaultTableModel());
+		tableModel = new DefaultTableModel();
+		for(String s : colNames) {
+			tableModel.addColumn(s);
+		}
+		for(Object[] o : data) {
+			tableModel.addRow(o);
+		}
+		table = new JTable(tableModel);
 		table.setEnabled(false);
-		tableModel = (DefaultTableModel) table.getModel();
+		table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+			@Override
+		    public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column)
+		    {
+		        final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+		        c.setBackground(row > spDataIndex ? Color.LIGHT_GRAY : Color.WHITE);
+		        return c;
+		    }
+		});
 		scrollPane = new JScrollPane(table);
+		scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
+		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS); 
+		scrollPane.setVisible(true);
 		panel.add(scrollPane);
 		return panel;
 	}
@@ -218,7 +245,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 */
 	protected void getStackData() {
 		int col;
-
 		System.out.println("getStackData start");
 		/*
 		 * Initial value of spAddr is 0x7FFFEFFC = 2147479548 (Default MIPS memory configuration).
@@ -325,6 +351,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		int row = (maxSpValueWordAligned - alignToCurrentWordBoundary(notice.getAddress())) / WORD_LENGTH_BYTES;
 		data[row][STORED_REGISTER_COLUMN] = regName;
 		getStackData();
+		while(tableModel.getRowCount() > 0) {
+			tableModel.removeRow(0);
+		}
+		for(Object[] o: data) {
+			tableModel.addRow(o);
+		}
 	}
 
 	private void processTextMemoryUpdate(MemoryAccessNotice notice) {
