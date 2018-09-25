@@ -3,12 +3,12 @@ package mars.tools;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.Observable;
-import java.util.Random;
 
 import javax.swing.JComponent;
 import javax.swing.JPanel;
@@ -18,8 +18,6 @@ import javax.swing.JTextField;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
-
-import com.sun.media.sound.ModelDestination;
 
 import mars.Globals;
 import mars.ProgramStatement;
@@ -34,9 +32,8 @@ import mars.mips.hardware.RegisterFile;
 import mars.mips.instructions.Instruction;
 import mars.simulator.BackStepper;
 import mars.venus.VenusUI;
-import sun.rmi.runtime.NewThreadAction;
 
-@SuppressWarnings({ "serial", "deprecation" })
+@SuppressWarnings({ "serial" })
 public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	private static String name    = "Stack Visualizer";
@@ -80,13 +77,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static String      regNameToBeStoredInStack = null;
 
 	// GUI-Related fields
-	@SuppressWarnings("unused")
 	private static String[]    colNames = {"Address", "-0", "-1", "-2", "-3", "Reg"};
 	private JTable      table;
 	private JPanel      panel;
 	private JScrollPane scrollPane;
 	private int spDataIndex = 0;	// FIXME: you have to set a value during runtime
-	@SuppressWarnings("unused")
 	private DefaultTableModel tableModel;
 	private static JTextField  spField;
 
@@ -111,11 +106,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	@Override
 	protected JComponent buildMainDisplayArea() {
+		GridBagConstraints c = new GridBagConstraints();
+		c.fill = GridBagConstraints.BOTH;
 		panel = new JPanel(new GridBagLayout());
 		panel.setPreferredSize(new Dimension(600, 650));
 		spField = new JTextField("Stack Pointer Value", 10);
 		spField.setEditable(false);
-		panel.add(spField);
+		panel.add(spField, c);
 		tableModel = new DefaultTableModel();
 		for(String s : colNames) {
 			tableModel.addColumn(s);
@@ -138,7 +135,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
 		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS); 
 		scrollPane.setVisible(true);
-		panel.add(scrollPane);
+		panel.add(scrollPane, c);
+		table.setFillsViewportHeight(true);
+		
 		return panel;
 	}
 
