@@ -68,7 +68,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int   LAST_BYTE_COLUMN         = FIRST_BYTE_COLUMN + WORD_LENGTH_BYTES - 1;
 	private static final int   STORED_REGISTER_COLUMN   = LAST_BYTE_COLUMN + 1;
 	private static final int   RS_OPERAND_LIST_INDEX    = 0;
-	private static int         numRows                  = 16; // TODO make generic
+	private static int         numRows                  = 24; // TODO make generic
 	private static final int   MAX_SP_VALUE             = Memory.stackBaseAddress + (WORD_LENGTH_BYTES-1);
 	private static int         maxSpValue               = SP_INIT_ADDR - 1;
 	private static int         maxSpValueWordAligned    = SP_INIT_ADDR - WORD_LENGTH_BYTES;
@@ -133,11 +133,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		});
 		scrollPane = new JScrollPane(table);
 		scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
-		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS); 
+		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 		scrollPane.setVisible(true);
 		panel.add(scrollPane, c);
 		table.setFillsViewportHeight(true);
-		
+
 		return panel;
 	}
 
@@ -148,18 +148,22 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				System.out.flush();
-				System.err.println("Assemble");
+				System.err.println("RunAssemble");
 				System.err.flush();
 				textSymbols = null;
 				disableBackStepper(false); // Not enough to work
 				jumpAddresses.clear();
+
 				/* Reset the column holding the register name whose contents
 				 * were stored in the corresponding memory address.
 				 */
 				for (int i = 0; i < data.length; i++)
 					data[i][STORED_REGISTER_COLUMN] = null;
-
 				enableRunButtons(true); // TODO verify
+
+				getStackData(); // data[][] has not yet been updated so this does nothing.
+				                // Maybe we should initialize array cells to 0?
+				refreshTableMobel(); // Required for updating stored register
 			}
 		});
 
@@ -172,6 +176,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				textSymbols = null;
 				disableBackStepper(false); // Not enough to work
 				jumpAddresses.clear();
+
 				/* Reset the column holding the register name whose contents
 				 * were stored in the corresponding memory address.
 				 */
@@ -179,6 +184,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					data[i][STORED_REGISTER_COLUMN] = null;
 
 				enableRunButtons(true); // TODO verify
+
+				getStackData(); // data[][] has not yet been updated so this does nothing.
+				                // Maybe we should initialize array cells to 0?
+				refreshTableMobel(); // Required for updating stored register
 			}
 		});
 
@@ -211,6 +220,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		});
 
 		getStackData();
+		// Do NOT call refreshTableMobel() here!
+		// Stack Visualizer's GUI has not yet been initialized!
 	}
 
 	@Override
@@ -233,6 +244,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				}
 			}
 		});
+
+		refreshTableMobel();
 	}
 
 	/*
@@ -350,12 +363,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		int row = (maxSpValueWordAligned - alignToCurrentWordBoundary(notice.getAddress())) / WORD_LENGTH_BYTES;
 		data[row][STORED_REGISTER_COLUMN] = regName;
 		getStackData();
-		while(tableModel.getRowCount() > 0) {
-			tableModel.removeRow(0);
-		}
-		for(Object[] o: data) {
-			tableModel.addRow(o);
-		}
+		refreshTableMobel();
 	}
 
 	private void processTextMemoryUpdate(MemoryAccessNotice notice) {
@@ -542,6 +550,17 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		System.err.println("ResetAction");
 		System.err.flush();
 		// TODO Do we really need it?
+		getStackData();
+		refreshTableMobel();
+	}
+
+	private void refreshTableMobel() {
+		while (tableModel.getRowCount() > 0) {
+			tableModel.removeRow(0);
+		}
+		for (Object[] o: data) {
+			tableModel.addRow(o);
+		}
 	}
 
 }
