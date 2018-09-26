@@ -69,14 +69,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int   RS_OPERAND_LIST_INDEX    = 0;
 	private static int         numRows                  = 24; // TODO make generic
 	private static final int   MAX_SP_VALUE             = Memory.stackBaseAddress + (WORD_LENGTH_BYTES-1);
-	private static int         maxSpValue               = SP_INIT_ADDR - 1;
-	private static int         maxSpValueWordAligned    = SP_INIT_ADDR - WORD_LENGTH_BYTES;
+	private static int         maxSpValue               = SP_INIT_ADDR + 3;
+	private static int         maxSpValueWordAligned    = SP_INIT_ADDR;
 //	private static int         minSpValue               = MAX_SP_VALUE;
 	private static Object[][]  data                     = new Object[numRows][NUMBER_OF_COLUMNS];
 	private static String      regNameToBeStoredInStack = null;
 
 	// GUI-Related fields
-	private static String[]    colNames = {"Address", "-0", "-1", "-2", "-3", "Reg"};
+	private static String[]    colNames = {"Address", "+3", "+2", "+1", "+0", "Reg"};
 	private JTable      table;
 	private JPanel      panel;
 	private JScrollPane scrollPane;
@@ -167,6 +167,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 				getStackData(); // data[][] has not yet been updated so this does nothing.
 				                // Maybe we should initialize array cells to 0?
+				spDataIndex = getTableIndex(getSpValue());
 				refreshTableMobel(); // Required for updating stored register
 			}
 		});
@@ -191,6 +192,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 				getStackData(); // data[][] has not yet been updated so this does nothing.
 				                // Maybe we should initialize array cells to 0?
+				spDataIndex = getTableIndex(getSpValue());
 				refreshTableMobel(); // Required for updating stored register
 			}
 		});
@@ -272,7 +274,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		 */
 		for (int row = 0, addr = maxSpValue; row < numRows; row++)
 		{
-			data[row][ADDRESS_COLUMN] = "0x" + hex(addr);
+			data[row][ADDRESS_COLUMN] = "0x" + hex(addr-3);
 			try {
 				// TODO Allow 'whole word' or 'per byte' data display.
 				for (int j = FIRST_BYTE_COLUMN; j <= LAST_BYTE_COLUMN; j++) {
@@ -565,6 +567,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		System.err.flush();
 		// TODO Do we really need it?
 		getStackData();
+		spDataIndex = getTableIndex(getSpValue());
 		refreshTableMobel();
 	}
 
