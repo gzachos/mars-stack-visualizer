@@ -15,7 +15,6 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
-import javax.swing.ScrollPaneConstants;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 
@@ -33,7 +32,7 @@ import mars.mips.instructions.Instruction;
 import mars.simulator.BackStepper;
 import mars.venus.VenusUI;
 
-@SuppressWarnings({ "serial" })
+@SuppressWarnings({ "serial", "deprecation" })
 public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	private static String name    = "Stack Visualizer";
@@ -72,7 +71,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int   MAX_SP_VALUE             = Memory.stackBaseAddress + (WORD_LENGTH_BYTES-1);
 	private static int         maxSpValue               = SP_INIT_ADDR - 1;
 	private static int         maxSpValueWordAligned    = SP_INIT_ADDR - WORD_LENGTH_BYTES;
-	private static int         minSpValue               = MAX_SP_VALUE;
+//	private static int         minSpValue               = MAX_SP_VALUE;
 	private static Object[][]  data                     = new Object[numRows][NUMBER_OF_COLUMNS];
 	private static String      regNameToBeStoredInStack = null;
 
@@ -89,7 +88,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static ArrayList<Integer> jumpAddresses = new ArrayList<Integer>();
 	private static boolean disabledBackStep = false;
 
-	private static boolean debug = true;
+	private static boolean debug = false;
 
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
@@ -114,26 +113,31 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		spField.setEditable(false);
 		panel.add(spField, c);
 		tableModel = new DefaultTableModel();
-		for(String s : colNames) {
+		for (String s : colNames)
 			tableModel.addColumn(s);
-		}
-		for(Object[] o : data) {
+		for (Object[] o : data)
 			tableModel.addRow(o);
-		}
 		table = new JTable(tableModel);
 		table.setEnabled(false);
 		table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
 			@Override
-		    public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column)
+		    public Component getTableCellRendererComponent(JTable table, Object value,
+		    		boolean isSelected, boolean hasFocus, int row, int column)
 		    {
-		        final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-		        c.setBackground(row > spDataIndex ? Color.LIGHT_GRAY : Color.WHITE);
+		        final Component c = super.getTableCellRendererComponent(table, value,
+		        		isSelected, hasFocus, row, column);
+		        Color color = Color.WHITE;
+		        if (row == spDataIndex)
+		        	color = Color.YELLOW;
+		        else if (row > spDataIndex)
+		        	color = Color.LIGHT_GRAY;
+		        c.setBackground(color);
 		        return c;
 		    }
 		});
 		scrollPane = new JScrollPane(table);
-		scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
-		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+//		scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
+//		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 		scrollPane.setVisible(true);
 		panel.add(scrollPane, c);
 		table.setFillsViewportHeight(true);
@@ -258,7 +262,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	protected void getStackData() {
 		int col;
 		System.out.println("getStackData start");
-		/*
+		/* FIXME: Do NOT ignore word @0x7FFFEFFC
+		 * 
 		 * Initial value of spAddr is 0x7FFFEFFC = 2147479548 (Default MIPS memory configuration).
 		 * We ignore the word starting @0x7FFFEFFC, hence the
 		 * first 4 bytes (1 word) to be displayed are:
@@ -337,9 +342,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			if (debug)
 				System.out.println("\nRegisterAccessNotice (W): " + r.getRegisterName()
 						+ " value: " + getSpValue());
-			if (r.getRegisterName().equals("$sp"))
-				if (minSpValue > getSpValue())
-					minSpValue = getSpValue();
+			if (r.getRegisterName().equals("$sp")) {
+				spDataIndex = getTableIndex(getSpValue());
+				System.out.println(getSpValue() + " " + spDataIndex);
+				refreshTableMobel();
+				if (spDataIndex + 2 > numRows) {
+					// TODO increase data[][] size
+				}
+			}
 		}
 	}
 
@@ -360,10 +370,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					+ notice.getAddress() + " value: " + notice.getValue() +
 					" (stored: " + regName + ")");
 		}
-		int row = (maxSpValueWordAligned - alignToCurrentWordBoundary(notice.getAddress())) / WORD_LENGTH_BYTES;
+		int row = getTableIndex(notice.getAddress());
 		data[row][STORED_REGISTER_COLUMN] = regName;
 		getStackData();
 		refreshTableMobel();
+	}
+	
+	private int getTableIndex(int memAddress) {
+		return (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
 	}
 
 	private void processTextMemoryUpdate(MemoryAccessNotice notice) {
