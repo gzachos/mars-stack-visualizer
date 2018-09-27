@@ -88,7 +88,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static ArrayList<Integer> jumpAddresses = new ArrayList<Integer>();
 	private static boolean disabledBackStep = false;
 
-	private static boolean debug = false;
+	private static boolean debug = false, printMemContents = false;
 
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
@@ -263,7 +263,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 */
 	protected void getStackData() {
 		int col;
-		System.out.println("getStackData start");
+		if (printMemContents)
+			System.out.println("getStackData start");
 		/* FIXME: Do NOT ignore word @0x7FFFEFFC
 		 * 
 		 * Initial value of spAddr is 0x7FFFEFFC = 2147479548 (Default MIPS memory configuration).
@@ -288,10 +289,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 								+ addr +": " + hex(memInstance.getByte(addr)));
 					data[row][col] = hex(memInstance.getByte(addr--));
 				}
-				System.out.print(data[row][0] + ": ");
-				for (int i = FIRST_BYTE_COLUMN; i <= LAST_BYTE_COLUMN; i++)
-					System.out.print(data[row][i] + (i == LAST_BYTE_COLUMN ? "" : ","));
-				System.out.println(" (" + data[row][STORED_REGISTER_COLUMN] + ")");
+				if (printMemContents) {
+					System.out.print(data[row][0] + ": ");
+					for (int i = FIRST_BYTE_COLUMN; i <= LAST_BYTE_COLUMN; i++)
+						System.out.print(data[row][i] + (i == LAST_BYTE_COLUMN ? "" : ","));
+					System.out.println(" (" + data[row][STORED_REGISTER_COLUMN] + ")");
+				}
 			} catch (AddressErrorException aee) {
 				aee.printStackTrace();
 			}
@@ -301,7 +304,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		tableModel.fireTableDataChanged();
 		// spField.setText(String.valueOf(getSpValue()));
 		spField.setText(hex(getSpValue()));
-*/		System.out.println("getStackData end\n");
+*/		if (printMemContents)
+			System.out.println("getStackData end\n");
 	}
 
 	@Override
@@ -346,7 +350,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 						+ " value: " + getSpValue());
 			if (r.getRegisterName().equals("$sp")) {
 				spDataIndex = getTableIndex(getSpValue());
-				System.out.println(getSpValue() + " " + spDataIndex);
+	//			System.out.println(getSpValue() + " " + spDataIndex);
 				refreshTableMobel();
 				if (spDataIndex + 2 > numRows) {
 					// TODO increase data[][] size
@@ -413,8 +417,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				if (isJumpAndLinkInstruction(instrName))
 					jumpAddresses.add(stmnt.getAddress());
 				if (targetLabel != null) {
-					System.out.print("Jumping to: " + targetLabel);
-					if (isJumpAndLinkInstruction(instrName))
+					if (debug)
+						System.out.print("Jumping to: " + targetLabel);
+					if (debug && isJumpAndLinkInstruction(instrName))
 						System.out.println(" (" + (jumpAddresses.size()) + ")");
 				}
 			}
@@ -423,8 +428,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				Register reg = RegisterFile.getRegisters()[targetRegister];
 				int targetAddress = reg.getValue();
 				ProgramStatement callerStatement =  memInstance.getStatementNoNotify(targetAddress-4);
-				System.out.println("Returning from: " + addrToTextSymbol(callerStatement.getOperand(0)*4) +
-						" (" +jumpAddresses.size() + ") to line: " + callerStatement.getSourceLine());
+				if (debug)
+					System.out.println("Returning from: " + addrToTextSymbol(callerStatement.getOperand(0)*4) +
+							" (" +jumpAddresses.size() + ") to line: " + callerStatement.getSourceLine());
 			//	System.out.println(jumpAddresses.get(jumpAddresses.size()-1) + " == " + callerStatement.getAddress());
 			//	for (int i = 0; i< jumpAddresses.size(); i++)
 			//		System.out.println((i+1) + ": " + jumpAddresses.get(i));
