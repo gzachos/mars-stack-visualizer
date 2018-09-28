@@ -10,7 +10,9 @@ import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.Observable;
 
+import javax.swing.JButton;
 import javax.swing.JComponent;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -36,9 +38,11 @@ import mars.venus.VenusUI;
 @SuppressWarnings({ "serial", "deprecation" })
 public class StackVisualizer extends AbstractMarsToolAndApplication {
 
-	private static String name    = "Stack Visualizer";
-	private static String version = "Version 0.1 (George Z. Zachos, Petros Manousis)";
-	private static String heading = "Visualizing stack modification operations";
+	private static String name        = "Stack Visualizer";
+	private static String versionID   = "0.2";
+	private static String version     = "Version " + versionID + " (George Z. Zachos, Petros Manousis)";
+	private static String heading     = "Visualizing Stack Modification Operations";
+	private static String releaseDate = "28-Sep-2018";
 
 	private static boolean displayDataPerByte = false;
 
@@ -68,7 +72,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int   LAST_BYTE_COLUMN         = FIRST_BYTE_COLUMN + WORD_LENGTH_BYTES - 1;
 	private static final int   STORED_REGISTER_COLUMN   = LAST_BYTE_COLUMN + 1;
 	private static final int   RS_OPERAND_LIST_INDEX    = 0;
-	private static final int   INITIAL_ROW_COUNT          = 24;
+	private static final int   INITIAL_ROW_COUNT        = 24;
 //	private static final int   MAX_SP_VALUE             = Memory.stackBaseAddress + (WORD_LENGTH_BYTES-1);
 	private static int         maxSpValue               = SP_INIT_ADDR + 3;
 	private static int         maxSpValueWordAligned    = SP_INIT_ADDR;
@@ -532,6 +536,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	/*
+	 *  TODO support visualization of addresses lower than maxSpValue (!)
+	 *  TODO write a proper help component
+	 *  
 	 *  TODO disable the reset button (is it really needed?)
 	 *  TODO disable BackStepper when menu items are pressed
 	 *       (currently only toolbar buttons are supported)
@@ -577,6 +584,33 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		// TODO Do we really need it?
 		getStackData();
 		spDataIndex = getTableIndex(getSpValue());
+	}
+	
+	@Override
+	protected JComponent getHelpComponent() {
+		final String helpContent = "Stack Visualizer\n\n"
+				+ "Release: " + versionID + "   (" + releaseDate + ")\n\n"
+				+ "Developed by George Z. Zachos and Petros Manousis under the\n"
+				+ "supervision of Aristides (Aris) Efthymiou. \n\n"
+				+ "About\n"
+				+ "This tool allows the user to view in real time the memory modification operations\n"
+				+ "taking place in the stack segment. The user can also observe how the stack grows.\n"
+				+ "The address pointed by the stack pointer is displayed in a yellow background\n"
+				+ "(currently word-aligned) while lower addresses have a light grey background (given\n"
+				+ "that stack growth takes place form higher to lower addresses).\n\n"
+				+ "Note\n"
+				+ "This program is suposed to be used as a MARS Tool and NOT a stand-alone application."
+				+ "\n\n"
+				+ "Contact\n"
+				+ "For questions or comments contact: George Z. Zachos (gzachos@cse.uoi.gr) or\n"
+				+ "Aristides Efthymiou (efthym@cse.uoi.gr)";
+		JButton help = new JButton("Help");
+		help.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				JOptionPane.showMessageDialog(theWindow, helpContent);
+			}
+		});
+		return help;
 	}
 
 }
