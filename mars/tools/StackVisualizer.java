@@ -118,16 +118,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		table.setEnabled(false);
 		table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
 			@Override
-		    public Component getTableCellRendererComponent(JTable table, Object value,
-		    		boolean isSelected, boolean hasFocus, int row, int column)
-		    {
-		        final Component c = super.getTableCellRendererComponent(table, value,
-		        		isSelected, hasFocus, row, column);
+		    public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+		        final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 		        Color color = Color.WHITE;
-		        if (row == spDataIndex)
+		        if (row == spDataIndex) {
 		        	color = Color.YELLOW;
-		        else if (row > spDataIndex)
+		        }
+		        if (row > spDataIndex) {
 		        	color = Color.LIGHT_GRAY;
+		        }
 		        c.setBackground(color);
 		        return c;
 		    }
@@ -155,6 +154,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				disableBackStepper(false); // Not enough to work
 				jumpAddresses.clear();
 
+				for (int i = 0; i < 24; i++) {
+					tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
+				}
+				
 				/* Reset the column holding the register name whose contents
 				 * were stored in the corresponding memory address.
 				 */
@@ -164,6 +167,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 				getStackData();
 				spDataIndex = getTableIndex(getSpValue());
+				table.repaint();
 			}
 		});
 
@@ -333,8 +337,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			if (r.getAccessType() == AccessNotice.READ)
 				return;
 			if (debug)
-				System.out.println("\nRegisterAccessNotice (W): " + r.getRegisterName()
-						+ " value: " + getSpValue());
+				System.out.println("\nRegisterAccessNotice (W): " + r.getRegisterName()	+ " value: " + getSpValue());
 			if (r.getRegisterName().equals("$sp")) {
 				spDataIndex = getTableIndex(getSpValue());
 	//			System.out.println(getSpValue() + " " + spDataIndex);
@@ -371,6 +374,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 	
 	private int getTableIndex(int memAddress) {
+		table.repaint();
 		return (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
 	}
 
