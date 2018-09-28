@@ -8,7 +8,6 @@ import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Observable;
 
 import javax.swing.JComponent;
@@ -69,7 +68,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int   LAST_BYTE_COLUMN         = FIRST_BYTE_COLUMN + WORD_LENGTH_BYTES - 1;
 	private static final int   STORED_REGISTER_COLUMN   = LAST_BYTE_COLUMN + 1;
 	private static final int   RS_OPERAND_LIST_INDEX    = 0;
-	private static final int   MAX_SP_VALUE             = Memory.stackBaseAddress + (WORD_LENGTH_BYTES-1);
+	private static final int   INITIAL_ROW_COUNT          = 24;
+//	private static final int   MAX_SP_VALUE             = Memory.stackBaseAddress + (WORD_LENGTH_BYTES-1);
 	private static int         maxSpValue               = SP_INIT_ADDR + 3;
 	private static int         maxSpValueWordAligned    = SP_INIT_ADDR;
 //	private static int         minSpValue               = MAX_SP_VALUE;
@@ -88,7 +88,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static ArrayList<Integer> jumpAddresses = new ArrayList<Integer>();
 	private static boolean disabledBackStep = false;
 
-	private static boolean debug = false, printMemContents = false;
+	private static boolean debug = false, printMemContents = false, debugBackStepper = false;
 
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
@@ -132,8 +132,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		    }
 		});
 		scrollPane = new JScrollPane(table);
-		scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
 		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+		// TODO: autoscroll around stack pointer?
 		scrollPane.setVisible(true);
 		panel.add(scrollPane, c);
 		table.setFillsViewportHeight(true);
@@ -147,9 +147,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		marsGui.getRunAssembleItem().addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				System.out.flush();
-				System.err.println("RunAssemble");
-				System.err.flush();
+				if (debugBackStepper) {
+					System.out.flush();
+					System.err.println("RunAssemble");
+					System.err.flush();
+				}
 				textSymbols = null;
 				disableBackStepper(false); // Not enough to work
 				jumpAddresses.clear();
@@ -174,9 +176,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		marsGui.getAssembleButton().addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				System.out.flush();
-				System.err.println("Assemble");
-				System.err.flush();
+				if (debugBackStepper) {
+					System.out.flush();
+					System.err.println("Assemble");
+					System.err.flush();
+				}
 				textSymbols = null;
 				disableBackStepper(false); // Not enough to work
 				jumpAddresses.clear();
@@ -191,6 +195,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 				getStackData();
 				spDataIndex = getTableIndex(getSpValue());
+				table.repaint();
 			}
 		});
 
@@ -222,7 +227,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			}
 		});
 
-		getStackData();
 	}
 
 	@Override
@@ -245,6 +249,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				}
 			}
 		});
+		
+		for (int i = 0; i < INITIAL_ROW_COUNT; i++)
+			tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
+		getStackData();
+		table.repaint();
 	}
 
 	/*
@@ -290,12 +299,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				aee.printStackTrace();
 			}
 		}
-		// TODO decide call sequence
-/*		tableModel.setDataVector(data, colNames);
-		tableModel.fireTableDataChanged();
-		// spField.setText(String.valueOf(getSpValue()));
-		spField.setText(hex(getSpValue()));
-*/		if (printMemContents)
+		
+		if (printMemContents)
 			System.out.println("getStackData end\n");
 	}
 
@@ -317,7 +322,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			//System.out.println(textSymbols.toString() + " " + textSymbols.size());
 			for (int i = 0; i < textSymbols.size(); i++) {
 				Symbol s = (Symbol) textSymbols.get(i);
-				System.out.println(s.getName() + " - " + s.getAddress());
+				if (debug)
+					System.out.println(s.getName() + " - " + s.getAddress());
 			}
 		}
 
@@ -340,10 +346,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				System.out.println("\nRegisterAccessNotice (W): " + r.getRegisterName()	+ " value: " + getSpValue());
 			if (r.getRegisterName().equals("$sp")) {
 				spDataIndex = getTableIndex(getSpValue());
-	//			System.out.println(getSpValue() + " " + spDataIndex);
-				if (spDataIndex + 2 > tableModel.getRowCount()) {
-					tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
+				// System.out.println("SP value: 0x" + hex(getSpValue()) + " - tableIndex: " + spDataIndex);
+				if (spDataIndex + 5 > tableModel.getRowCount()) {
+					for (int i = 0; i < 5; i++)
+						tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
+					getStackData();
 				}
+				table.repaint();
 			}
 		}
 	}
@@ -366,15 +375,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					" (stored: " + regName + ")");
 		}
 		int row = getTableIndex(notice.getAddress());
-		if(row >= tableModel.getRowCount()) {	// FIXME: returns 1 when data.size() = 1 (I set it to data.size() - 1: aka 0).
-			row = tableModel.getRowCount() - 1;
-		}
+		// System.out.println("Addr: 0x" + hex(notice.getAddress()) + " - tableIndex: " + row);
 		tableModel.setValueAt(regName, row, STORED_REGISTER_COLUMN);
 		getStackData();
+		table.repaint();
 	}
 	
 	private int getTableIndex(int memAddress) {
-		table.repaint();
 		return (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
 	}
 
@@ -496,7 +503,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		if (bs == null)
 			return false;
 		if (bs.enabled()) {
-			System.err.println("disabled backStepper");
+			if (debugBackStepper)
+				System.err.println("disabled backStepper");
 			bs.setEnabled(false);
 			marsGui.getRunBackstepAction().setEnabled(false);
 			disabledBackStep = true;
@@ -510,7 +518,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				return;
 			BackStepper bs = Globals.program.getBackStepper();
 			if (bs != null) {
-				System.err.println("enabled backStepper");
+				if (debugBackStepper)
+					System.err.println("enabled backStepper");
 				bs.setEnabled(true);
 				marsGui.getRunBackstepAction().setEnabled(true);
 			}
@@ -560,9 +569,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	@Override
 	protected void reset() {
-		System.out.flush();
-		System.err.println("ResetAction");
-		System.err.flush();
+		if (debugBackStepper) {
+			System.out.flush();
+			System.err.println("ResetAction");
+			System.err.flush();
+		}
 		// TODO Do we really need it?
 		getStackData();
 		spDataIndex = getTableIndex(getSpValue());
