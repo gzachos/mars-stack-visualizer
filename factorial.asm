@@ -6,7 +6,7 @@
 	.text
 	
 main:
-	addi	$a0, $zero, 8
+	addi	$a0, $zero, 13
 	jal	fact
 	add     $a0, $v0, $zero
 	li      $v0, 1
