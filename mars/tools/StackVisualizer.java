@@ -62,37 +62,38 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static VenusUI   marsGui       = Globals.getGui();
 	private static final boolean LITTLE_ENDIAN = Memory.LITTLE_ENDIAN;
 
-	private static final int   WORD_LENGTH_BYTES        = Memory.WORD_LENGTH_BYTES;
-	private static final int   WORD_LENGTH_BITS         = WORD_LENGTH_BYTES * 8;
+	private static final int  WORD_LENGTH_BYTES         = Memory.WORD_LENGTH_BYTES;
+	private static final int  WORD_LENGTH_BITS          = WORD_LENGTH_BYTES * 8;
 	// data[][] related fields
-	private static final int   NUMBER_OF_COLUMNS        = WORD_LENGTH_BYTES + 2; // +1 for address
+	private static final int  NUMBER_OF_COLUMNS         = WORD_LENGTH_BYTES + 2; // +1 for address
 	                                                                             // +1 for register name stored
-	private static final int   ADDRESS_COLUMN           = 0; // Should always be in first column.
-	private static final int   FIRST_BYTE_COLUMN        = 1; // Should always be in second column.
-	private static final int   LAST_BYTE_COLUMN         = FIRST_BYTE_COLUMN + WORD_LENGTH_BYTES - 1;
-	private static final int   STORED_REGISTER_COLUMN   = LAST_BYTE_COLUMN + 1;
-	private static final int   RS_OPERAND_LIST_INDEX    = 0;
-	private static final int   INITIAL_ROW_COUNT        = 24;
-//	private static final int   MAX_SP_VALUE             = Memory.stackBaseAddress + (WORD_LENGTH_BYTES-1);
-	private static int         maxSpValue               = SP_INIT_ADDR + 3;
-	private static int         maxSpValueWordAligned    = SP_INIT_ADDR;
-//	private static int         minSpValue               = MAX_SP_VALUE;
-	private static String      regNameToBeStoredInStack = null;
+	private static final int  ADDRESS_COLUMN            = 0; // Should always be in first column.
+	private static final int  FIRST_BYTE_COLUMN         = 1; // Should always be in second column.
+	private static final int  LAST_BYTE_COLUMN          = FIRST_BYTE_COLUMN + WORD_LENGTH_BYTES - 1;
+	private static final int  STORED_REGISTER_COLUMN    = LAST_BYTE_COLUMN + 1;
+	private static final int  I_RS_OPERAND_LIST_INDEX   = 0; // I-format RS (source register) index
+	private static final int  J_ADDR_OPERAND_LIST_INDEX = 0; // J-format Address index
+	private static final int  R_RS_OPERAND_LIST_INDEX   = 0; // R-format RS (source register) index
+	private static final int  INITIAL_ROW_COUNT         = 24;
+	private static int        maxSpValue                = SP_INIT_ADDR + 3;
+	private static int        maxSpValueWordAligned     = SP_INIT_ADDR;
+	private static String     regNameToBeStoredInStack  = null;
 
 	// GUI-Related fields
-	private static String[]    colNames = {"Address", "+3", "+2", "+1", "+0", "Reg"};
-	private JTable      table;
-	private JPanel      panel;
-	private JScrollPane scrollPane;
-	private int spDataIndex = 0;	// FIXME: you have to set a value during runtime
+	private static String[]   colNames = {"Address", "+3", "+2", "+1", "+0", "Stored Reg"};
+	private JTable            table;
+	private JPanel            panel;
+	private JScrollPane       scrollPane;
+	private int               spDataIndex = 0;
 	private DefaultTableModel tableModel = new DefaultTableModel();
-	private static JTextField  spField;
+	private static JTextField spField;
 
 	private static ArrayList<?> textSymbols = null; // TODO verify generics
 	private static ArrayList<Integer> jumpAddresses = new ArrayList<Integer>();
 	private static boolean disabledBackStep = false;
 
-	private static boolean debug = false, printMemContents = false, debugBackStepper = false;
+	private static boolean debug = false, printMemContents = false, debugBackStepper = false,
+			debugTextSymbols = false;
 
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
@@ -137,6 +138,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		});
 		scrollPane = new JScrollPane(table);
 		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+		// TODO: disable re-ordering of columns by cursor dragging
 		// TODO: autoscroll around stack pointer?
 		scrollPane.setVisible(true);
 		panel.add(scrollPane, c);
@@ -156,19 +158,20 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					System.err.println("RunAssemble");
 					System.err.flush();
 				}
-				textSymbols = null;
+				textSymbols = null;        // Clear labels
 				disableBackStepper(false); // Not enough to work
-				jumpAddresses.clear();
+				jumpAddresses.clear();     // Clear jump addresses
 
 				for (int i = 0; i < 24; i++) {
 					tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
 				}
-				
+
 				/* Reset the column holding the register name whose contents
 				 * were stored in the corresponding memory address.
 				 */
 				for (int i = 0; i < tableModel.getRowCount(); i++)
 					tableModel.setValueAt("", i, STORED_REGISTER_COLUMN);
+
 				enableRunButtons(true); // TODO verify
 
 				getStackData();
@@ -185,9 +188,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					System.err.println("Assemble");
 					System.err.flush();
 				}
-				textSymbols = null;
+				textSymbols = null;        // Clear labels
 				disableBackStepper(false); // Not enough to work
-				jumpAddresses.clear();
+				jumpAddresses.clear();     // Clear jump addresses
 
 				/* Reset the column holding the register name whose contents
 				 * were stored in the corresponding memory address.
@@ -253,7 +256,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				}
 			}
 		});
-		
+
 		for (int i = 0; i < INITIAL_ROW_COUNT; i++)
 			tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
 		getStackData();
@@ -261,23 +264,28 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	/*
-	 * getStackData() fires a MemoryAccessNotice every time
-	 * it reads from memory. For this reason it should not be
-	 * called in a code block handling a MemoryAccessNotice
-	 * of AccessNotice.READ type as it will lead in infinite
+	 * getStackData() fires a MemoryAccessNotice every time it reads from memory.
+	 * For this reason it should not be called in a code block handling a
+	 * MemoryAccessNotice of AccessNotice.READ type as it will lead in infinite
 	 * recursive calls of itself.
 	 */
 	protected void getStackData() {
 		int col;
+
 		if (printMemContents)
 			System.out.println("getStackData start");
-		/* FIXME: Do NOT ignore word @0x7FFFEFFC
-		 * 
+		/*
+		 * MARS supports three memory configurations. Only in the default configuration
+		 * the initial stack pointer value does NOT point to the highest address of the
+		 * stack. Nevertheless, in all three configurations, the initial address pointed
+		 * by $sp is a valid address whose contents can be written.
+		 *
+		 * TODO support visualization of addresses higher than initial $sp value
+		 *
 		 * Initial value of spAddr is 0x7FFFEFFC = 2147479548 (Default MIPS memory configuration).
-		 * We ignore the word starting @0x7FFFEFFC, hence the
-		 * first 4 bytes (1 word) to be displayed are:
-		 * 0x7FFFEFFB, 0x7FFFEFFA, 0x7FFFEFF9, 0x7FFFEFF8 or in decimal value:
-		 * 2147479547, 2147479546, 2147479545, 2147479544.
+		 * The first 4 bytes (1 word) to be displayed are:
+		 * 0x7FFFEFFF, 0x7FFFEFFE, 0x7FFFEFFD, 0x7FFFEFFC or in decimal value:
+		 * 2147479551, 2147479550, 2147479549, 2147479548.
 		 */
 		for (int row = 0, addr = maxSpValue; row < tableModel.getRowCount(); row++) {
 			tableModel.setValueAt("0x" + hex(addr-3), row, ADDRESS_COLUMN);
@@ -303,14 +311,21 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				aee.printStackTrace();
 			}
 		}
-		
+
 		if (printMemContents)
 			System.out.println("getStackData end\n");
 	}
 
 	@Override
 	protected void addAsObserver() {
+		// To observe stack segment, actual parameters should be
+		// reversed due to higher to lower address stack growth.
 		addAsObserver(Memory.stackLimitAddress, Memory.stackBaseAddress);
+		/*
+		 * TODO: verify that Memory.stackBaseAdress+1 to Memory.stackBaseAdress+3
+		 * can be observed during half word- or byte-length operations.
+		 * Update check in getTableIndex() too if needed.
+		 */
 		addAsObserver(RegisterFile.getRegisters()[SP_REG_NUMBER]);
 		addAsObserver(Memory.textBaseAddress, Memory.textLimitAddress);
 	}
@@ -321,13 +336,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 		// System.out.println(notice.accessIsFromMIPS() +" " + notice.accessIsFromGUI());
 
-		if (textSymbols == null) { // TODO fire after assemble
+		if (textSymbols == null) { // TODO retrieve symbols after assemble. verify it works
+			// TODO: check for Globals.program == null?
 			textSymbols = Globals.program.getLocalSymbolTable().getTextSymbols();
-			//System.out.println(textSymbols.toString() + " " + textSymbols.size());
-			for (int i = 0; i < textSymbols.size(); i++) {
-				Symbol s = (Symbol) textSymbols.get(i);
-				if (debug)
+			if (debugTextSymbols) {
+				System.out.println(textSymbols.toString() + " " + textSymbols.size());
+				for (int i = 0; i < textSymbols.size(); i++) {
+					Symbol s = (Symbol) textSymbols.get(i);
 					System.out.println(s.getName() + " - " + s.getAddress());
+				}
 			}
 		}
 
@@ -342,22 +359,31 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				processStackMemoryUpdate(m);
 		}
 		else if (notice instanceof RegisterAccessNotice) {
-			// Currently only $sp is observed
 			RegisterAccessNotice r = (RegisterAccessNotice) notice;
-			if (r.getAccessType() == AccessNotice.READ)
-				return;
-			if (debug)
-				System.out.println("\nRegisterAccessNotice (W): " + r.getRegisterName()	+ " value: " + getSpValue());
-			if (r.getRegisterName().equals("$sp")) {
-				spDataIndex = getTableIndex(getSpValue());
-				// System.out.println("SP value: 0x" + hex(getSpValue()) + " - tableIndex: " + spDataIndex);
-				if (spDataIndex + 5 > tableModel.getRowCount()) {
-					for (int i = 0; i < 5; i++)
-						tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
-					getStackData();
-				}
-				table.repaint();
+			processRegisterAccessNotice(r);
+		}
+	}
+
+	private void processRegisterAccessNotice(RegisterAccessNotice notice) {
+		// Currently only $sp is observed
+		// TODO: What about observing frame pointer?
+		// TODO: What about copying $sp and $fp into other registers?
+		if (notice.getAccessType() == AccessNotice.READ)
+			return;
+
+		if (debug)
+			System.out.println("\nRegisterAccessNotice (W): " + notice.getRegisterName() + " value: " + getSpValue());
+
+		if (notice.getRegisterName().equals("$sp")) {
+			spDataIndex = getTableIndex(getSpValue());
+//			 System.out.println("SP value: 0x" + hex(getSpValue()) + " - tableIndex: " + spDataIndex);
+			// Add more rows if we are reaching current row count
+			if (spDataIndex + 5 > tableModel.getRowCount()) {
+				for (int i = 0; i < 5; i++)
+					tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
+				getStackData();
 			}
+			table.repaint();
 		}
 	}
 
@@ -370,52 +396,62 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		if (regNameToBeStoredInStack != null) {
 			regName = regNameToBeStoredInStack;
 			regNameToBeStoredInStack = null;
-		} else
+		} else {
 			regName = "";
+		}
+
 		if (debug) {
 			System.out.println("\nStackAccessNotice (" +
 					((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
 					+ notice.getAddress() + " value: " + notice.getValue() +
 					" (stored: " + regName + ")");
 		}
+
 		int row = getTableIndex(notice.getAddress());
-		// System.out.println("Addr: 0x" + hex(notice.getAddress()) + " - tableIndex: " + row);
+
+		if (debug)
+			System.out.println("Addr: 0x" + hex(notice.getAddress()) + " - tableIndex: " + row + " (" + regName + ")");
+
 		tableModel.setValueAt(regName, row, STORED_REGISTER_COLUMN);
 		getStackData();
 		table.repaint();
 	}
-	
+
 	private int getTableIndex(int memAddress) {
+		if (memAddress > Memory.stackBaseAddress || memAddress < Memory.stackLimitAddress) {
+			System.err.println("getTableIndex() only works for stack segment addresses");
+			return -1;
+		}
 		return (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
 	}
 
 	private void processTextMemoryUpdate(MemoryAccessNotice notice) {
 		if (notice.getAccessType() == AccessNotice.WRITE)
 			return;
+
 		if (debug) {
-			System.out.println("\nTextAccessNotice (" +
-					((notice.getAccessType() == AccessNotice.READ) ? "R" : "W") + "): "
-					+ notice.getAddress() + " value: " + notice.getValue() /*+ " = "*/);
+			System.out.println("\nTextAccessNotice (R): " + notice.getAddress()
+					+ " value: " + notice.getValue() /*+ " = "*/);
 		}
-		// printBin(notice.getValue());
+//		printBin(notice.getValue());
+
 		try {
 			ProgramStatement stmnt =  memInstance.getStatementNoNotify(notice.getAddress());
 			Instruction instr = stmnt.getInstruction();
 			String instrName = instr.getName();
 			int[] operands;
+
 			if (isStoreInstruction(instrName)) {
 				if (debug)
 					System.out.println("Statement TBE: " + stmnt.getPrintableBasicAssemblyStatement());
-
 				operands = stmnt.getOperands();
-	/*			for (int i = 0; i < operands.length; i++)
-					System.out.print(operands[i] + " ");
-				System.out.println();
-	*/
-				regNameToBeStoredInStack = RegisterFile.getRegisters()[operands[RS_OPERAND_LIST_INDEX]].getName();
+//				for (int i = 0; i < operands.length; i++)
+//					System.out.print(operands[i] + " ");
+//				System.out.println();
+				regNameToBeStoredInStack = RegisterFile.getRegisters()[operands[I_RS_OPERAND_LIST_INDEX]].getName();
 			}
 			else if (isJumpInstruction(instrName) || isJumpAndLinkInstruction(instrName)) {
-				int targetAdrress = stmnt.getOperand(0)*4;
+				int targetAdrress = stmnt.getOperand(J_ADDR_OPERAND_LIST_INDEX) * 4;
 				String targetLabel = addrToTextSymbol(targetAdrress);
 				if (isJumpAndLinkInstruction(instrName))
 					jumpAddresses.add(stmnt.getAddress());
@@ -427,23 +463,26 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				}
 			}
 			else if (isJumpRegInstruction(instrName)) {
-				int targetRegister = stmnt.getOperand(0);
+				int targetRegister = stmnt.getOperand(R_RS_OPERAND_LIST_INDEX);
 				Register reg = RegisterFile.getRegisters()[targetRegister];
 				int targetAddress = reg.getValue();
+				// targetAddress-4 is needed as PC+4 is stored in $ra when jal is executed.
+				// TODO: Verify it always works
 				ProgramStatement callerStatement =  memInstance.getStatementNoNotify(targetAddress-4);
-				if (debug)
+				if (debug) {
 					System.out.println("Returning from: " + addrToTextSymbol(callerStatement.getOperand(0)*4) +
 							" (" +jumpAddresses.size() + ") to line: " + callerStatement.getSourceLine());
-			//	System.out.println(jumpAddresses.get(jumpAddresses.size()-1) + " == " + callerStatement.getAddress());
-			//	for (int i = 0; i< jumpAddresses.size(); i++)
-			//		System.out.println((i+1) + ": " + jumpAddresses.get(i));
+				}
+//				System.out.println(jumpAddresses.get(jumpAddresses.size()-1) + " == " + callerStatement.getAddress());
+//				for (int i = 0; i< jumpAddresses.size(); i++)
+//					System.out.println((i+1) + ": " + jumpAddresses.get(i));
 
 				try {
 					if (jumpAddresses.remove(jumpAddresses.size()-1) != callerStatement.getAddress())
 						System.out.println("Mismatching return address");
 				} catch (IndexOutOfBoundsException e) {
-					// FIXME Exception thrown whenever function calling steps are undone
-					// and the program is again executed. undo last step is not supported
+					// Exception is thrown whenever function calling instructions are back-stepped (undone)
+					// and again executed. Undoing the last step is not supported!
 					e.printStackTrace();
 				}
 			}
@@ -471,17 +510,24 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		return (instrName.equals("jr"));
 	}
 
-	private String addrToTextSymbol(int addr) {
+	private String addrToTextSymbol(int address) {
 		if (textSymbols == null) {
-			// textSymbols = Globals.program.getLocalSymbolTable().getTextSymbols(); // no return in this case
+			// In this case we can retrieve text symbols here and not return null.
+			// textSymbols = Globals.program.getLocalSymbolTable().getTextSymbols();
+			return null;
+		}
+
+		if (!Memory.inTextSegment(address)) {
+			System.err.println("addrToTextSymbol() only works for text segment addresses");
 			return null;
 		}
 
 		for (int i = 0; i < textSymbols.size(); i++) {
 			Symbol s = (Symbol) textSymbols.get(i);
-			if (s.getAddress() == addr)
+			if (s.getAddress() == address)
 				return s.getName();
 		}
+		System.err.println("addrToTextSymbol(): Error translating address to label");
 		return null;
 	}
 
@@ -536,9 +582,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	/*
-	 *  TODO support visualization of addresses lower than maxSpValue (!)
-	 *  TODO write a proper help component
-	 *  
 	 *  TODO disable the reset button (is it really needed?)
 	 *  TODO disable BackStepper when menu items are pressed
 	 *       (currently only toolbar buttons are supported)
@@ -585,9 +628,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		getStackData();
 		spDataIndex = getTableIndex(getSpValue());
 	}
-	
+
 	@Override
 	protected JComponent getHelpComponent() {
+		// TODO write a proper help component
 		final String helpContent = "Stack Visualizer\n\n"
 				+ "Release: " + versionID + "   (" + releaseDate + ")\n\n"
 				+ "Developed by George Z. Zachos (gzachos@cse.uoi.gr) and\n"
