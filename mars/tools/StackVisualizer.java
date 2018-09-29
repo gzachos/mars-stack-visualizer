@@ -75,7 +75,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int  J_ADDR_OPERAND_LIST_INDEX = 0; // J-format Address index
 	private static final int  R_RS_OPERAND_LIST_INDEX   = 0; // R-format RS (source register) index
 	private static final int  INITIAL_ROW_COUNT         = 24;
-	private static int        maxSpValue                = SP_INIT_ADDR + 3;
+	private static final int  INITIAL_MAX_SP_VALUE      = SP_INIT_ADDR + 3;
+	private static final int  maxSpValue                = INITIAL_MAX_SP_VALUE;
 	private static int        maxSpValueWordAligned     = SP_INIT_ADDR;
 	private static String     regNameToBeStoredInStack  = null;
 
@@ -150,6 +151,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	@Override
 	protected void initializePreGUI() {
 
+		// TODO: disable actions performed when Tool not connected!
 		marsGui.getRunAssembleItem().addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -161,10 +163,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				textSymbols = null;        // Clear labels
 				disableBackStepper(false); // Not enough to work
 				jumpAddresses.clear();     // Clear jump addresses
-
-				for (int i = 0; i < 24; i++) {
-					tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
-				}
 
 				/* Reset the column holding the register name whose contents
 				 * were stored in the corresponding memory address.
@@ -260,7 +258,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		for (int i = 0; i < INITIAL_ROW_COUNT; i++)
 			tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
 		getStackData();
-		table.repaint();
+		table.repaint(); // Maybe we can remove this
 	}
 
 	/*
@@ -383,7 +381,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
 				getStackData();
 			}
-			table.repaint();
+			table.repaint(); // Required for coloring $sp position during popping.
 		}
 	}
 
@@ -624,9 +622,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			System.err.println("ResetAction");
 			System.err.flush();
 		}
-		// TODO Do we really need it?
 		getStackData();
 		spDataIndex = getTableIndex(getSpValue());
+		table.repaint();
 	}
 
 	@Override
