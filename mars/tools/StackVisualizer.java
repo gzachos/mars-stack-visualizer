@@ -161,7 +161,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					System.err.flush();
 				}
 				textSymbols = null;        // Clear labels
-				disableBackStepper(false); // Not enough to work
 				jumpAddresses.clear();     // Clear jump addresses
 
 				/* Reset the column holding the register name whose contents
@@ -170,7 +169,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				for (int i = 0; i < tableModel.getRowCount(); i++)
 					tableModel.setValueAt("", i, STORED_REGISTER_COLUMN);
 
-				enableRunButtons(true); // TODO verify
+				runButtonsSetEnabled(true);
 
 				getStackData();
 				spDataIndex = getTableIndex(getSpValue());
@@ -187,7 +186,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					System.err.flush();
 				}
 				textSymbols = null;        // Clear labels
-				disableBackStepper(false); // Not enough to work
 				jumpAddresses.clear();     // Clear jump addresses
 
 				/* Reset the column holding the register name whose contents
@@ -196,39 +194,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				for (int i = 0; i < tableModel.getRowCount(); i++)
 					tableModel.setValueAt("", i, STORED_REGISTER_COLUMN);
 
-				enableRunButtons(true); // TODO verify
+				runButtonsSetEnabled(true);
 
 				getStackData();
 				spDataIndex = getTableIndex(getSpValue());
 				table.repaint();
-			}
-		});
-
-		marsGui.getRunGoItem().addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				disableBackStepper(false);
-			}
-		});
-
-		marsGui.getRunButton().addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				disableBackStepper(false);
-			}
-		});
-
-		marsGui.getRunStepItem().addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				disableBackStepper(false);
-			}
-		});
-
-		marsGui.getStepButton().addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				disableBackStepper(false);
 			}
 		});
 
@@ -242,15 +212,22 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			public void actionPerformed(ActionEvent e) {
 				if (connectButton.isConnected()) {
 					restoreBackStepper(); // TODO We really need this?
-					disabledBackStep = false;
 				} else {
 					/*
 					 * User program should be recompiled (and executed) after
 					 * StackVisualizer is launched. This is required for
 					 * coherently storing the subroutine call stack.
 					 */
-					enableRunButtons(false); // TODO verify
-					disableBackStepper(true);
+					runButtonsSetEnabled(false);
+//					marsGui.getRunBackstepAction().isEnabled(); // TODO disable?
+					disableBackStepper();
+					getStackData();
+					spDataIndex = getTableIndex(getSpValue());
+					table.repaint();
+
+					String msg = "Back Stepping has been disabled.\n"
+							+ "Already running programs should be assembled again.";
+					showMessageWindow(msg);
 				}
 			}
 		});
@@ -258,6 +235,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		for (int i = 0; i < INITIAL_ROW_COUNT; i++)
 			tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
 		getStackData();
+		spDataIndex = getTableIndex(getSpValue());
 		table.repaint(); // Maybe we can remove this
 	}
 
@@ -328,11 +306,16 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		addAsObserver(Memory.textBaseAddress, Memory.textLimitAddress);
 	}
 
+	@Override
+	protected void deleteAsObserver() {
+		super.deleteAsObserver(); // Stop observing memory (default)
+		deleteAsObserver(RegisterFile.getRegisters()[SP_REG_NUMBER]); // Stop observing $sp
+	}
 
 	@Override
 	protected void processMIPSUpdate(Observable resource, AccessNotice notice) {
 
-		// System.out.println(notice.accessIsFromMIPS() +" " + notice.accessIsFromGUI());
+//		System.out.println(notice.accessIsFromMIPS() +" " + notice.accessIsFromGUI() + " " + notice);
 
 		if (textSymbols == null) { // TODO retrieve symbols after assemble. verify it works
 			// TODO: check for Globals.program == null?
@@ -348,6 +331,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 		if (!notice.accessIsFromMIPS())
 			return;
+
+		disableBackStepper();
 
 		if (notice instanceof MemoryAccessNotice) {
 			MemoryAccessNotice m = (MemoryAccessNotice) notice;
@@ -542,55 +527,52 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 * BackStepper when the Connect button is pressed.
 	 * (The tool is not yet registered as observing)
 	 */
-	private boolean disableBackStepper(boolean ignoreObserving) {
+	private void disableBackStepper() {
 		if (Globals.program == null)
-			return false;
-		if (!isObserving() && !ignoreObserving)
-			return false;
+			return;
 		BackStepper bs = Globals.program.getBackStepper();
 		if (bs == null)
-			return false;
+			return;
 		if (bs.enabled()) {
 			if (debugBackStepper)
-				System.err.println("disabled backStepper");
+				System.err.println("Disabled BackStepper");
 			bs.setEnabled(false);
-			marsGui.getRunBackstepAction().setEnabled(false);
 			disabledBackStep = true;
 		}
-		return true;
 	}
 
 	private void restoreBackStepper() {
 		if (disabledBackStep) {
+			disabledBackStep = false;
 			if (Globals.program == null)
 				return;
 			BackStepper bs = Globals.program.getBackStepper();
-			if (bs != null) {
+			if (bs == null)
+				return;
+			if (!bs.enabled()) {
 				if (debugBackStepper)
-					System.err.println("enabled backStepper");
+					System.err.println("Enabled BackStepper");
 				bs.setEnabled(true);
-				marsGui.getRunBackstepAction().setEnabled(true);
 			}
 		}
 	}
 
-	private void enableRunButtons(boolean b) {
-		marsGui.getRunGoAction().setEnabled(b);
-		marsGui.getRunStepAction().setEnabled(b);
+	private void runButtonsSetEnabled(boolean state) {
+		marsGui.getRunGoAction().setEnabled(state);
+		marsGui.getRunStepAction().setEnabled(state);
 	}
 
 	/*
-	 *  TODO disable the reset button (is it really needed?)
 	 *  TODO disable BackStepper when menu items are pressed
 	 *       (currently only toolbar buttons are supported)
 	 *       (Live edit: menu items are supported but refactoring
 	 *       is required)
 	 */
 
-	@Override
-	protected void performSpecialClosingDuties() {
-		disabledBackStep = false;
-	}
+//	@Override
+//	protected void performSpecialClosingDuties() {
+//		disabledBackStep = false;
+//	}
 
 	/**
 	 * Utility method to align given address to current full word boundary,
@@ -650,10 +632,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		JButton help = new JButton("Help");
 		help.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				JOptionPane.showMessageDialog(theWindow, helpContent);
+				showMessageWindow(helpContent);
 			}
 		});
 		return help;
+	}
+	
+	private void showMessageWindow(String message) {
+		JOptionPane.showMessageDialog(theWindow, message);
 	}
 
 }
