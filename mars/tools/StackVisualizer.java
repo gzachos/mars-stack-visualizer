@@ -124,18 +124,18 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		table.setEnabled(false);
 		table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
 			@Override
-		    public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-		        final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-		        Color color = Color.WHITE;
-		        if (row == spDataIndex) {
-		        	color = Color.YELLOW;
-		        }
-		        if (row > spDataIndex) {
-		        	color = Color.LIGHT_GRAY;
-		        }
-		        c.setBackground(color);
-		        return c;
-		    }
+			public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+				final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+				Color color = Color.WHITE;
+				if (row == spDataIndex) {
+					color = Color.YELLOW;
+				}
+				if (row > spDataIndex) {
+					color = Color.LIGHT_GRAY;
+				}
+				c.setBackground(color);
+				return c;
+			}
 		});
 		scrollPane = new JScrollPane(table);
 		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
@@ -219,6 +219,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					 * coherently storing the subroutine call stack.
 					 */
 					runButtonsSetEnabled(false);
+					// Connecting StackVisualizer in the middle of program execution
+					// will disable Back Stepper but the button is enabled.
+					// Maybe we should disable it by hand or just don't mess with it.
 //					marsGui.getRunBackstepAction().isEnabled(); // TODO disable?
 					disableBackStepper();
 					getStackData();
@@ -562,18 +565,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		marsGui.getRunStepAction().setEnabled(state);
 	}
 
-	/*
-	 *  TODO disable BackStepper when menu items are pressed
-	 *       (currently only toolbar buttons are supported)
-	 *       (Live edit: menu items are supported but refactoring
-	 *       is required)
-	 */
-
-//	@Override
-//	protected void performSpecialClosingDuties() {
-//		disabledBackStep = false;
-//	}
-
 	/**
 	 * Utility method to align given address to current full word boundary,
 	 * if not already aligned.
@@ -637,7 +628,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		});
 		return help;
 	}
-	
+
 	private void showMessageWindow(String message) {
 		JOptionPane.showMessageDialog(theWindow, message);
 	}
