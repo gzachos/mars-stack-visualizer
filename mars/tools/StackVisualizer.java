@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Observable;
 
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -81,13 +82,16 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static String     regNameToBeStoredInStack  = null;
 
 	// GUI-Related fields
-	private static String[]   colNames = {"Address", "+3", "+2", "+1", "+0", "Stored Reg"};
+	private static String[]   colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg"};
+	private static String[]   colNamesWhenNotDataPerByte = {"Address", "+3+2+1+0", "Stored Reg"};
 	private JTable            table;
 	private JPanel            panel;
 	private JScrollPane       scrollPane;
 	private int               spDataIndex = 0;
 	private DefaultTableModel tableModel = new DefaultTableModel();
-	private static JTextField spField;
+	private JCheckBox dataPerByte;
+	private JCheckBox hexadecimalAddresses;
+	private JCheckBox hexadecimalValues;
 
 	private static ArrayList<?> textSymbols = null; // TODO verify generics
 	private static ArrayList<Integer> jumpAddresses = new ArrayList<Integer>();
@@ -113,12 +117,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	protected JComponent buildMainDisplayArea() {
 		GridBagConstraints c = new GridBagConstraints();
 		c.fill = GridBagConstraints.BOTH;
+		c.gridx = 0;
+		c.gridy = 0;
 		panel = new JPanel(new GridBagLayout());
 		panel.setPreferredSize(new Dimension(600, 650));
-		spField = new JTextField("Stack Pointer Value", 10);
-		spField.setEditable(false);
-		panel.add(spField, c);
-		for (String s : colNames)
+		for (String s : colNamesWhenDataPerByte)
 			tableModel.addColumn(s);
 		table = new JTable(tableModel);
 		table.setEnabled(false);
@@ -144,7 +147,39 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		scrollPane.setVisible(true);
 		panel.add(scrollPane, c);
 		table.setFillsViewportHeight(true);
-
+		c.gridy++;	// change line
+		dataPerByte = new JCheckBox("Display data per byte");
+		dataPerByte.setSelected(true);
+		panel.add(dataPerByte, c);
+		dataPerByte.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if(dataPerByte.isSelected() == false) {
+					tableModel.setColumnCount(0);	// clearing columns of table
+					for (String s : colNamesWhenNotDataPerByte) {
+						tableModel.addColumn(s);	// setting new columns
+					}
+					// TODO: add code that shows sth and repaint the table.
+				}
+				else {
+					tableModel.setColumnCount(0);	// clearing columns of table
+					for (String s : colNamesWhenDataPerByte) {
+						tableModel.addColumn(s);	// setting new columns
+					}
+					// TODO: add code that shows sth and repaint the table.
+					getStackData();
+					table.repaint();
+				}
+			}
+		});
+		c.gridy++;	// change line
+		hexadecimalAddresses = new JCheckBox("Hexadecimal Addresses");
+		hexadecimalAddresses.setSelected(true);
+		panel.add(hexadecimalAddresses, c);
+		c.gridy++;	// change line
+		hexadecimalValues = new JCheckBox("Hexadecimal Values");
+		hexadecimalValues.setSelected(true);
+		panel.add(hexadecimalValues, c);
 		return panel;
 	}
 
