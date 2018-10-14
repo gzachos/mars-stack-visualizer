@@ -647,9 +647,17 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	private String formatWordLengthMemContents(int data) {
 		if (hexadecimalValues.isSelected())
-			return Integer.toHexString(data);
+			return intTo8DigitHexStringNoPrefix(data);
 		else
 			return Integer.toString(data);
+	}
+
+	private String intTo8DigitHexStringNoPrefix(int data) {
+		String leadingZero = new String("0");
+		String ret = Integer.toHexString(data);
+		while (ret.length() < 8)
+			ret = leadingZero.concat(ret);
+		return ret;
 	}
 
 	private String formatByteLengthMemContents(int data) {
