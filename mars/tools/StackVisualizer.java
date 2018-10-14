@@ -17,7 +17,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
-import javax.swing.JTextField;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
@@ -65,13 +64,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	private static final int  WORD_LENGTH_BYTES         = Memory.WORD_LENGTH_BYTES;
 	private static final int  WORD_LENGTH_BITS          = WORD_LENGTH_BYTES * 8;
-	// data[][] related fields
-	private static final int  NUMBER_OF_COLUMNS         = WORD_LENGTH_BYTES + 2; // +1 for address
-	                                                                             // +1 for register name stored
+
 	private static final int  ADDRESS_COLUMN            = 0; // Should always be in first column.
 	private static final int  FIRST_BYTE_COLUMN         = 1; // Should always be in second column.
 	private static final int  LAST_BYTE_COLUMN          = FIRST_BYTE_COLUMN + WORD_LENGTH_BYTES - 1;
-	private static final int  STORED_REGISTER_COLUMN    = LAST_BYTE_COLUMN + 1;
+	private static final int  WORD_COLUMN               = 1;
 	private static final int  I_RS_OPERAND_LIST_INDEX   = 0; // I-format RS (source register) index
 	private static final int  J_ADDR_OPERAND_LIST_INDEX = 0; // J-format Address index
 	private static final int  R_RS_OPERAND_LIST_INDEX   = 0; // R-format RS (source register) index
@@ -80,18 +77,19 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int  maxSpValue                = INITIAL_MAX_SP_VALUE;
 	private static int        maxSpValueWordAligned     = SP_INIT_ADDR;
 	private static String     regNameToBeStoredInStack  = null;
+	private static int        storedRegisterColumn, numberOfColumns;
 
 	// GUI-Related fields
 	private static String[]   colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg"};
-	private static String[]   colNamesWhenNotDataPerByte = {"Address", "+3+2+1+0", "Stored Reg"};
+	private static String[]   colNamesWhenNotDataPerByte = {"Address", "Word-length Data", "Stored Reg"};
 	private JTable            table;
 	private JPanel            panel;
 	private JScrollPane       scrollPane;
 	private int               spDataIndex = 0;
 	private DefaultTableModel tableModel = new DefaultTableModel();
-	private JCheckBox dataPerByte;
-	private JCheckBox hexadecimalAddresses;
-	private JCheckBox hexadecimalValues;
+	private JCheckBox         dataPerByte;
+	private JCheckBox         hexadecimalAddresses;
+	private JCheckBox         hexadecimalValues;
 
 	private static ArrayList<?> textSymbols = null; // TODO verify generics
 	private static ArrayList<Integer> jumpAddresses = new ArrayList<Integer>();
@@ -142,11 +140,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		});
 		scrollPane = new JScrollPane(table);
 		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
-		// TODO: disable re-ordering of columns by cursor dragging
-		// TODO: autoscroll around stack pointer?
 		scrollPane.setVisible(true);
 		panel.add(scrollPane, c);
 		table.setFillsViewportHeight(true);
+
 		c.gridy++;	// change line
 		dataPerByte = new JCheckBox("Display data per byte");
 		dataPerByte.setSelected(true);
@@ -159,26 +156,34 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					for (String s : colNamesWhenNotDataPerByte) {
 						tableModel.addColumn(s);	// setting new columns
 					}
-					// TODO: add code that shows sth and repaint the table.
+					numberOfColumns = tableModel.getColumnCount();
+					storedRegisterColumn = tableModel.getColumnCount() - 1;
+					getStackData();
+					table.repaint();
 				}
 				else {
 					tableModel.setColumnCount(0);	// clearing columns of table
 					for (String s : colNamesWhenDataPerByte) {
 						tableModel.addColumn(s);	// setting new columns
 					}
-					// TODO: add code that shows sth and repaint the table.
+					numberOfColumns = tableModel.getColumnCount();
+					storedRegisterColumn = tableModel.getColumnCount() - 1;
 					getStackData();
 					table.repaint();
 				}
 			}
 		});
+
 		c.gridy++;	// change line
 		hexadecimalAddresses = new JCheckBox("Hexadecimal Addresses");
 		hexadecimalAddresses.setSelected(true);
+		hexadecimalAddresses.setEnabled(false);
 		panel.add(hexadecimalAddresses, c);
+
 		c.gridy++;	// change line
 		hexadecimalValues = new JCheckBox("Hexadecimal Values");
 		hexadecimalValues.setSelected(true);
+		hexadecimalValues.setEnabled(false);
 		panel.add(hexadecimalValues, c);
 		return panel;
 	}
@@ -202,7 +207,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				 * were stored in the corresponding memory address.
 				 */
 				for (int i = 0; i < tableModel.getRowCount(); i++)
-					tableModel.setValueAt("", i, STORED_REGISTER_COLUMN);
+					tableModel.setValueAt("", i, storedRegisterColumn);
 
 				runButtonsSetEnabled(true);
 
@@ -227,7 +232,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				 * were stored in the corresponding memory address.
 				 */
 				for (int i = 0; i < tableModel.getRowCount(); i++)
-					tableModel.setValueAt("", i, STORED_REGISTER_COLUMN);
+					tableModel.setValueAt("", i, storedRegisterColumn);
 
 				runButtonsSetEnabled(true);
 
@@ -271,7 +276,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		});
 
 		for (int i = 0; i < INITIAL_ROW_COUNT; i++)
-			tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
+			tableModel.addRow(new Object[numberOfColumns]);
 		getStackData();
 		spDataIndex = getTableIndex(getSpValue());
 		table.repaint(); // Maybe we can remove this
@@ -304,22 +309,31 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		for (int row = 0, addr = maxSpValue; row < tableModel.getRowCount(); row++) {
 			tableModel.setValueAt("0x" + hex(addr-3), row, ADDRESS_COLUMN);
 			try {
-				// TODO Allow 'whole word' or 'per byte' data display.
-				for (int j = FIRST_BYTE_COLUMN; j <= LAST_BYTE_COLUMN; j++) {
-					/*
-					 * Endianness determines whether byte position in value and
-					 * byte position in memory match.
-					 */
-					col = (endianness == LITTLE_ENDIAN) ? j : (LAST_BYTE_COLUMN-j) + FIRST_BYTE_COLUMN;
-					if (displayDataPerByte)
-						System.out.println("(" + row + "," + col + ") - " + addr +": " + hex(memInstance.getByte(addr)));
-					tableModel.setValueAt(hex(memInstance.getByte(addr--)), row, col);
+				if (dataPerByte.isSelected()) {
+					for (int j = FIRST_BYTE_COLUMN; j <= LAST_BYTE_COLUMN; j++) {
+						/*
+						 * Endianness determines whether byte position in value and
+						 * byte position in memory match.
+						 */
+						col = (endianness == LITTLE_ENDIAN) ? j : (LAST_BYTE_COLUMN-j) + FIRST_BYTE_COLUMN;
+						if (displayDataPerByte)
+							System.out.println("(" + row + "," + col + ") - " + addr +": " + hex(memInstance.getByte(addr)));
+						tableModel.setValueAt(hex(memInstance.getByte(addr--)), row, col);
+					}
+				} else {
+					col = WORD_COLUMN;
+					addr -= WORD_LENGTH_BYTES-1;
+					tableModel.setValueAt(hex(memInstance.getWord(addr--)), row, col);
 				}
 				if (printMemContents) {
 					System.out.print(tableModel.getValueAt(row, 0) + ": ");
-					for (int i = FIRST_BYTE_COLUMN; i <= LAST_BYTE_COLUMN; i++)
-						System.out.print(tableModel.getValueAt(row, i) + (i == LAST_BYTE_COLUMN ? "" : ","));
-					System.out.println(" (" + tableModel.getValueAt(row, STORED_REGISTER_COLUMN) + ")");
+					if (dataPerByte.isSelected()) {
+						for (int i = FIRST_BYTE_COLUMN; i <= LAST_BYTE_COLUMN; i++)
+							System.out.print(tableModel.getValueAt(row, i) + (i == LAST_BYTE_COLUMN ? "" : ","));
+					} else {
+						System.out.print(tableModel.getValueAt(row, WORD_COLUMN));
+					}
+					System.out.println(" (" + tableModel.getValueAt(row, storedRegisterColumn) + ")");
 				}
 			} catch (AddressErrorException aee) {
 				aee.printStackTrace();
@@ -356,7 +370,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 //		System.out.println(notice.accessIsFromMIPS() +" " + notice.accessIsFromGUI() + " " + notice);
 
 		if (textSymbols == null) { // TODO retrieve symbols after assemble. verify it works
-			// TODO: check for Globals.program == null?
 			textSymbols = Globals.program.getLocalSymbolTable().getTextSymbols();
 			if (debugTextSymbols) {
 				System.out.println(textSymbols.toString() + " " + textSymbols.size());
@@ -388,7 +401,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private void processRegisterAccessNotice(RegisterAccessNotice notice) {
 		// Currently only $sp is observed
 		// TODO: What about observing frame pointer?
-		// TODO: What about copying $sp and $fp into other registers?
 		if (notice.getAccessType() == AccessNotice.READ)
 			return;
 
@@ -400,8 +412,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 //			 System.out.println("SP value: 0x" + hex(getSpValue()) + " - tableIndex: " + spDataIndex);
 			// Add more rows if we are reaching current row count
 			if (spDataIndex + 5 > tableModel.getRowCount()) {
-				for (int i = 0; i < 5; i++)
-					tableModel.addRow(new Object[NUMBER_OF_COLUMNS]);
+				for (int i = 0; i < 5; i++) {
+					tableModel.addRow(new Object[numberOfColumns]);
+				}
 				getStackData();
 			}
 			table.repaint(); // Required for coloring $sp position during popping.
@@ -433,7 +446,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		if (debug)
 			System.out.println("Addr: 0x" + hex(notice.getAddress()) + " - tableIndex: " + row + " (" + regName + ")");
 
-		tableModel.setValueAt(regName, row, STORED_REGISTER_COLUMN);
+		tableModel.setValueAt(regName, row, storedRegisterColumn);
 		getStackData();
 		table.repaint();
 	}
