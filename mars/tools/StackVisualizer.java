@@ -209,6 +209,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		marsGui.getRunAssembleItem().addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
+				if (!isObserving()) // TODO verify
+					return;
+
 				if (debugBackStepper) {
 					System.out.flush();
 					System.err.println("RunAssemble");
@@ -234,6 +237,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		marsGui.getAssembleButton().addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
+				if (!isObserving()) // TODO verify
+					return;
+
 				if (debugBackStepper) {
 					System.out.flush();
 					System.err.println("Assemble");
