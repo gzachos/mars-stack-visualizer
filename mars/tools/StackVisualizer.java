@@ -33,6 +33,7 @@ import mars.mips.hardware.RegisterAccessNotice;
 import mars.mips.hardware.RegisterFile;
 import mars.mips.instructions.Instruction;
 import mars.simulator.BackStepper;
+import mars.util.Binary;
 import mars.venus.VenusUI;
 
 @SuppressWarnings({ "serial", "deprecation" })
@@ -77,7 +78,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int  maxSpValue                = INITIAL_MAX_SP_VALUE;
 	private static int        maxSpValueWordAligned     = SP_INIT_ADDR;
 	private static String     regNameToBeStoredInStack  = null;
-	private static int        storedRegisterColumn, numberOfColumns;
+	private static int        numberOfColumns           = 6; // 1: address, 2-5: bytes, 6: stored register
+	private static int        storedRegisterColumn      = numberOfColumns-1;
 
 	// GUI-Related fields
 	private static String[]   colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg"};
@@ -157,7 +159,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 						tableModel.addColumn(s);	// setting new columns
 					}
 					numberOfColumns = tableModel.getColumnCount();
-					storedRegisterColumn = tableModel.getColumnCount() - 1;
+					storedRegisterColumn = numberOfColumns - 1;
 					getStackData();
 					table.repaint();
 				}
@@ -167,7 +169,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 						tableModel.addColumn(s);	// setting new columns
 					}
 					numberOfColumns = tableModel.getColumnCount();
-					storedRegisterColumn = tableModel.getColumnCount() - 1;
+					storedRegisterColumn = numberOfColumns - 1;
 					getStackData();
 					table.repaint();
 				}
@@ -176,14 +178,26 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 		c.gridy++;	// change line
 		hexadecimalAddresses = new JCheckBox("Hexadecimal Addresses");
+		hexadecimalAddresses.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				getStackData();
+				table.repaint();
+			}
+		});
 		hexadecimalAddresses.setSelected(true);
-		hexadecimalAddresses.setEnabled(false);
 		panel.add(hexadecimalAddresses, c);
 
 		c.gridy++;	// change line
 		hexadecimalValues = new JCheckBox("Hexadecimal Values");
+		hexadecimalValues.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				getStackData();
+				table.repaint();
+			}
+		});
 		hexadecimalValues.setSelected(true);
-		hexadecimalValues.setEnabled(false);
 		panel.add(hexadecimalValues, c);
 		return panel;
 	}
@@ -307,7 +321,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		 * 2147479551, 2147479550, 2147479549, 2147479548.
 		 */
 		for (int row = 0, addr = maxSpValue; row < tableModel.getRowCount(); row++) {
-			tableModel.setValueAt("0x" + hex(addr-3), row, ADDRESS_COLUMN);
+			tableModel.setValueAt(formatAddress(addr-3), row, ADDRESS_COLUMN);
 			try {
 				if (dataPerByte.isSelected()) {
 					for (int j = FIRST_BYTE_COLUMN; j <= LAST_BYTE_COLUMN; j++) {
@@ -317,13 +331,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 						 */
 						col = (endianness == LITTLE_ENDIAN) ? j : (LAST_BYTE_COLUMN-j) + FIRST_BYTE_COLUMN;
 						if (displayDataPerByte)
-							System.out.println("(" + row + "," + col + ") - " + addr +": " + hex(memInstance.getByte(addr)));
-						tableModel.setValueAt(hex(memInstance.getByte(addr--)), row, col);
+							System.out.println("(" + row + "," + col + ") - " + addr +": " +
+									formatByteLengthMemContents(memInstance.getByte(addr)));
+						tableModel.setValueAt(formatByteLengthMemContents(memInstance.getByte(addr--)), row, col);
 					}
 				} else {
 					col = WORD_COLUMN;
-					addr -= WORD_LENGTH_BYTES-1;
-					tableModel.setValueAt(hex(memInstance.getWord(addr--)), row, col);
+					addr -= WORD_LENGTH_BYTES-1; // TODO simplify addr update
+					tableModel.setValueAt(formatWordLengthMemContents(memInstance.getWord(addr--)), row, col);
 				}
 				if (printMemContents) {
 					System.out.print(tableModel.getValueAt(row, 0) + ": ");
@@ -409,7 +424,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 		if (notice.getRegisterName().equals("$sp")) {
 			spDataIndex = getTableIndex(getSpValue());
-//			 System.out.println("SP value: 0x" + hex(getSpValue()) + " - tableIndex: " + spDataIndex);
+//			 System.out.println("SP value: " + formatAddress(getSpValue()) + " - tableIndex: " + spDataIndex);
 			// Add more rows if we are reaching current row count
 			if (spDataIndex + 5 > tableModel.getRowCount()) {
 				for (int i = 0; i < 5; i++) {
@@ -444,7 +459,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		int row = getTableIndex(notice.getAddress());
 
 		if (debug)
-			System.out.println("Addr: 0x" + hex(notice.getAddress()) + " - tableIndex: " + row + " (" + regName + ")");
+			System.out.println("Addr: " + formatAddress(notice.getAddress()) + " - tableIndex: " + row + " (" + regName + ")");
 
 		tableModel.setValueAt(regName, row, storedRegisterColumn);
 		getStackData();
@@ -565,10 +580,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		return null;
 	}
 
-	private String hex(int decimalValue) {
-		return Integer.toHexString(decimalValue);
-	}
-
 	private int getSpValue() {
 		return RegisterFile.getValue(SP_REG_NUMBER);
 	}
@@ -625,6 +636,35 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		if (Memory.wordAligned(address))
 			return address;
 		return (Memory.alignToWordBoundary(address) - WORD_LENGTH_BYTES);
+	}
+
+	private String formatAddress(int address) {
+		if (hexadecimalAddresses.isSelected())
+			return Binary.intToHexString(address);
+		else
+			return Integer.toString(address);
+	}
+
+	private String formatWordLengthMemContents(int data) {
+		if (hexadecimalValues.isSelected())
+			return Integer.toHexString(data);
+		else
+			return Integer.toString(data);
+	}
+
+	private String formatByteLengthMemContents(int data) {
+		if (hexadecimalValues.isSelected())
+			return intTo2DigitHexStringNoPrefix(data);
+		else
+			return Integer.toString(data);
+	}
+
+	private String intTo2DigitHexStringNoPrefix(int data) {
+		String leadingZero = new String("0");
+		String ret = Integer.toHexString(data);
+		while (ret.length() < 2)
+			ret = leadingZero.concat(ret);
+		return ret;
 	}
 
 	@SuppressWarnings("unused")
