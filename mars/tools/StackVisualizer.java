@@ -110,9 +110,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	public StackVisualizer() {
 		super(StackVisualizer.name + ", " + StackVisualizer.version, StackVisualizer.heading);
-		this.setMinimumSize(new Dimension(600, 650));
-		this.setLayout(new BorderLayout());
-		this.pack();
 	}
 
 	@Override
@@ -151,6 +148,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				c.setBackground(color);
 				if(dataPerByte.isSelected()) {
 					if(column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN) {
+						setHorizontalAlignment(SwingConstants.RIGHT);
+					}
+					else {
+						setHorizontalAlignment(SwingConstants.LEFT);
+					}
+				}
+				else {
+					if(column == WORD_COLUMN) {
 						setHorizontalAlignment(SwingConstants.RIGHT);
 					}
 					else {
