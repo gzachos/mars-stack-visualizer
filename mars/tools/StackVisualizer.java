@@ -1,8 +1,10 @@
 package mars.tools;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
@@ -18,6 +20,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 
@@ -107,6 +110,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	public StackVisualizer() {
 		super(StackVisualizer.name + ", " + StackVisualizer.version, StackVisualizer.heading);
+		this.setMinimumSize(new Dimension(600, 650));
+		this.setLayout(new BorderLayout());
+		this.pack();
 	}
 
 	@Override
@@ -119,12 +125,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		GridBagConstraints c = new GridBagConstraints();
 		c.fill = GridBagConstraints.BOTH;
 		c.gridx = 0;
+		c.weightx = 1.0;
 		c.gridy = 0;
+		c.weighty = 1.0;
 		panel = new JPanel(new GridBagLayout());
 		panel.setPreferredSize(new Dimension(600, 650));
 		for (String s : colNamesWhenDataPerByte)
 			tableModel.addColumn(s);
 		table = new JTable(tableModel);
+		table.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
 		table.setEnabled(false);
 		table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
 			@Override
@@ -140,6 +149,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					color = Color.LIGHT_GRAY;
 				}
 				c.setBackground(color);
+				if(dataPerByte.isSelected()) {
+					if(column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN) {
+						setHorizontalAlignment(SwingConstants.RIGHT);
+					}
+					else {
+						setHorizontalAlignment(SwingConstants.LEFT);
+					}
+				}
 				return c;
 			}
 		});
@@ -150,6 +167,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		table.setFillsViewportHeight(true);
 
 		c.gridy++;	// change line
+		c.weightx = 1.0;
+		c.weighty = 0;
 		dataPerByte = new JCheckBox("Display data per byte");
 		dataPerByte.setSelected(true);
 		panel.add(dataPerByte, c);
