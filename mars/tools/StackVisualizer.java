@@ -87,7 +87,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private JTable            table;
 	private JPanel            panel;
 	private JScrollPane       scrollPane;
-	private int               spDataIndex = 0;
+	private int               spDataRowIndex = 0;
+	private int               spDataColumnIndex = LAST_BYTE_COLUMN;
 	private DefaultTableModel tableModel = new DefaultTableModel();
 	private JCheckBox         dataPerByte;
 	private JCheckBox         hexadecimalAddresses;
@@ -130,10 +131,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
 				final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 				Color color = Color.WHITE;
-				if (row == spDataIndex) {
+				if (row == spDataRowIndex) {
 					color = Color.YELLOW;
+					if (dataPerByte.isSelected() && column == spDataColumnIndex)
+						color = Color.ORANGE;
 				}
-				if (row > spDataIndex) {
+				if (row > spDataRowIndex) {
 					color = Color.LIGHT_GRAY;
 				}
 				c.setBackground(color);
@@ -229,7 +232,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				runButtonsSetEnabled(true);
 
 				getStackData();
-				spDataIndex = getTableIndex(getSpValue());
+				spDataRowIndex = getTableRowIndex(getSpValue());
+				spDataColumnIndex = getTableColumnIndex(getSpValue());
 				table.repaint();
 			}
 		});
@@ -257,7 +261,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				runButtonsSetEnabled(true);
 
 				getStackData();
-				spDataIndex = getTableIndex(getSpValue());
+				spDataRowIndex = getTableRowIndex(getSpValue());
+				spDataColumnIndex = getTableColumnIndex(getSpValue());
 				table.repaint();
 			}
 		});
@@ -285,7 +290,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 //					marsGui.getRunBackstepAction().isEnabled(); // TODO disable?
 					disableBackStepper();
 					getStackData();
-					spDataIndex = getTableIndex(getSpValue());
+					spDataRowIndex = getTableRowIndex(getSpValue());
+					spDataColumnIndex = getTableColumnIndex(getSpValue());
 					table.repaint();
 
 					String msg = "Back Stepping has been disabled.\n"
@@ -298,7 +304,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		for (int i = 0; i < INITIAL_ROW_COUNT; i++)
 			tableModel.addRow(new Object[numberOfColumns]);
 		getStackData();
-		spDataIndex = getTableIndex(getSpValue());
+		spDataRowIndex = getTableRowIndex(getSpValue());
+		spDataColumnIndex = getTableColumnIndex(getSpValue());
 		table.repaint(); // Maybe we can remove this
 	}
 
@@ -373,7 +380,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		/*
 		 * TODO: verify that Memory.stackBaseAdress+1 to Memory.stackBaseAdress+3
 		 * can be observed during half word- or byte-length operations.
-		 * Update check in getTableIndex() too if needed.
+		 * Update check in getTableRowIndex() too if needed.
 		 */
 		addAsObserver(RegisterFile.getRegisters()[SP_REG_NUMBER]);
 		addAsObserver(Memory.textBaseAddress, Memory.textLimitAddress);
@@ -429,10 +436,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			System.out.println("\nRegisterAccessNotice (W): " + notice.getRegisterName() + " value: " + getSpValue());
 
 		if (notice.getRegisterName().equals("$sp")) {
-			spDataIndex = getTableIndex(getSpValue());
-//			 System.out.println("SP value: " + formatAddress(getSpValue()) + " - tableIndex: " + spDataIndex);
+			spDataRowIndex = getTableRowIndex(getSpValue());
+			spDataColumnIndex = getTableColumnIndex(getSpValue());
+//			 System.out.println("SP value: " + formatAddress(getSpValue()) + " - tableIndex: " + spDataRowIndex);
 			// Add more rows if we are reaching current row count
-			if (spDataIndex + 5 > tableModel.getRowCount()) {
+			if (spDataRowIndex + 5 > tableModel.getRowCount()) {
 				for (int i = 0; i < 5; i++) {
 					tableModel.addRow(new Object[numberOfColumns]);
 				}
@@ -462,7 +470,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					" (stored: " + regName + ")");
 		}
 
-		int row = getTableIndex(notice.getAddress());
+		int row = getTableRowIndex(notice.getAddress());
 
 		if (debug)
 			System.out.println("Addr: " + formatAddress(notice.getAddress()) + " - tableIndex: " + row + " (" + regName + ")");
@@ -472,12 +480,20 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		table.repaint();
 	}
 
-	private int getTableIndex(int memAddress) {
+	private int getTableRowIndex(int memAddress) {
 		if (memAddress > Memory.stackBaseAddress || memAddress < Memory.stackLimitAddress) {
-			System.err.println("getTableIndex() only works for stack segment addresses");
+			System.err.println("getTableRowIndex() only works for stack segment addresses");
 			return -1;
 		}
 		return (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
+	}
+	
+	private int getTableColumnIndex(int memAddress) {
+		if (memAddress > Memory.stackBaseAddress || memAddress < Memory.stackLimitAddress) {
+			System.err.println("getTableColumnIndex() only works for stack segment addresses");
+			return -1;
+		}
+		return LAST_BYTE_COLUMN - (memAddress % WORD_LENGTH_BYTES);
 	}
 
 	private void processTextMemoryUpdate(MemoryAccessNotice notice) {
@@ -698,7 +714,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			System.err.flush();
 		}
 		getStackData();
-		spDataIndex = getTableIndex(getSpValue());
+		spDataRowIndex = getTableRowIndex(getSpValue());
+		spDataColumnIndex = getTableColumnIndex(getSpValue());
 		table.repaint();
 	}
 
