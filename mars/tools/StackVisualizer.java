@@ -487,7 +487,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		}
 		return (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
 	}
-	
+
 	private int getTableColumnIndex(int memAddress) {
 		if (memAddress > Memory.stackBaseAddress || memAddress < Memory.stackLimitAddress) {
 			System.err.println("getTableColumnIndex() only works for stack segment addresses");
@@ -508,6 +508,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 		try {
 			ProgramStatement stmnt =  memInstance.getStatementNoNotify(notice.getAddress());
+
+			/*
+			 * The check below is required in case user program is finished running
+			 * by dropping of the bottom. This happens when an execution termination
+			 * service (Code 10 in $v0) does NOT take place.
+			 */
+			if (stmnt == null)
+				return;
+
 			Instruction instr = stmnt.getInstruction();
 			String instrName = instr.getName();
 			int[] operands;
@@ -558,6 +567,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				}
 			}
 		} catch (AddressErrorException e) {
+			// Suppress such warnings
+//			e.printStackTrace();
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
