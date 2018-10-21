@@ -760,7 +760,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		final String helpContent = "Stack Visualizer\n\n"
 				+ "Release: " + versionID + "   (" + releaseDate + ")\n\n"
 				+ "Developed by George Z. Zachos (gzachos@cse.uoi.gr) and\n"
-				+ "Petros Manousis (pmanousi@cse.uoi.gr) under the supervision of\n"
+				+ "Petros Manousis (pmanousi@cs.uoi.gr) under the supervision of\n"
 				+ "Aristides (Aris) Efthymiou (efthym@cse.uoi.gr).\n\n"
 				+ "About\n"
 				+ "This tool allows the user to view in real time the memory modification operations\n"
