@@ -191,26 +191,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		dataPerByte.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				if(dataPerByte.isSelected() == false) {
-					tableModel.setColumnCount(0);	// clearing columns of table
-					for (String s : colNamesWhenNotDataPerByte) {
-						tableModel.addColumn(s);	// setting new columns
-					}
-					numberOfColumns = tableModel.getColumnCount();
-					storedRegisterColumn = numberOfColumns - 1;
-					getStackData();
-					table.repaint();
-				}
-				else {
-					tableModel.setColumnCount(0);	// clearing columns of table
-					for (String s : colNamesWhenDataPerByte) {
-						tableModel.addColumn(s);	// setting new columns
-					}
-					numberOfColumns = tableModel.getColumnCount();
-					storedRegisterColumn = numberOfColumns - 1;
-					getStackData();
-					table.repaint();
-				}
+				if(dataPerByte.isSelected() == false)
+					transformTableModel(colNamesWhenNotDataPerByte);
+				else
+					transformTableModel(colNamesWhenDataPerByte);
 			}
 		});
 
@@ -238,6 +222,24 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		hexadecimalValues.setSelected(true);
 		panel.add(hexadecimalValues, c);
 		return panel;
+	}
+	
+	private void transformTableModel(String columnNames[]) {
+		int rowCount = tableModel.getRowCount();
+		Object storedRedColumnData[] = new Object[rowCount];
+		for (int i = 0; i < rowCount; i++)
+			storedRedColumnData[i] = tableModel.getValueAt(i, storedRegisterColumn);
+		
+		tableModel.setColumnCount(0);	// clearing columns of table
+		for (String s : columnNames) {
+			tableModel.addColumn(s);	// setting new columns
+		}
+		numberOfColumns = tableModel.getColumnCount();
+		storedRegisterColumn = numberOfColumns - 1;
+		for (int i = 0; i < rowCount; i++)
+			tableModel.setValueAt(storedRedColumnData[i], i, storedRegisterColumn);
+		getStackData();
+		table.repaint();
 	}
 
 	@Override
@@ -598,6 +600,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				} catch (IndexOutOfBoundsException e) {
 					// Exception is thrown whenever function calling instructions are back-stepped (undone)
 					// and again executed. Undoing the last step is not supported!
+					//
+					// It also happens in case StackVisualizer gets disconnected while user program is executing
+					// and then is again connected. TODO fix
 					e.printStackTrace();
 				}
 			}
