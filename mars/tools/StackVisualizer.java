@@ -95,6 +95,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private JCheckBox         dataPerByte;
 	private JCheckBox         hexadecimalAddresses;
 	private JCheckBox         hexadecimalValues;
+	private static final int  LIGHT_YELLOW = 0xFFFF99;
+	private static final int  LIGHT_ORANGE = 0xFFC266;
+	private static final int  LIGHT_GRAY   = 0xE0E0E0;
+	private static final int  GRAY         = 0x999999;
+	private static final int  WHITE        = 0xFFFFFF;
 
 	private static ArrayList<?> textSymbols = null; // TODO verify generics
 	private static ArrayList<Integer> jumpAddresses = new ArrayList<Integer>();
@@ -135,16 +140,21 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			@Override
 			public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
 				final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-				Color color = Color.WHITE;
+				int color = WHITE;
 				if (row == spDataRowIndex) {
-					color = Color.YELLOW;
+					color = LIGHT_YELLOW;
 					if (dataPerByte.isSelected() && column == spDataColumnIndex)
-						color = Color.ORANGE;
+						color = LIGHT_ORANGE;
 				}
-				if (row > spDataRowIndex) {
-					color = Color.LIGHT_GRAY;
+				else if (row > spDataRowIndex) {
+					color = GRAY;
 				}
-				c.setBackground(color);
+				else {
+					if (row % 2 == 0)
+						color = LIGHT_GRAY;
+				}
+				c.setBackground(new Color(color));
+				
 				if (dataPerByte.isSelected()) {
 					if (column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN)
 						setHorizontalAlignment(SwingConstants.RIGHT);
