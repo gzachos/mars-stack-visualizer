@@ -135,6 +135,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			tableModel.addColumn(s);
 		table = new JTable(tableModel);
 		table.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+		table.getTableHeader().setReorderingAllowed(false);
 		table.setEnabled(false);
 		table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
 			@Override
@@ -143,6 +144,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				int color = WHITE;
 				if (row == spDataRowIndex) {
 					color = LIGHT_YELLOW;
+					// $sp cell coloring doesn't work with user column reordering
 					if (dataPerByte.isSelected() && column == spDataColumnIndex)
 						color = LIGHT_ORANGE;
 				}
