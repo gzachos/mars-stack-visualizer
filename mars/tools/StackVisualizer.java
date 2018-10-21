@@ -1,6 +1,5 @@
 package mars.tools;
 
-import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -130,7 +129,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		for (String s : colNamesWhenDataPerByte)
 			tableModel.addColumn(s);
 		table = new JTable(tableModel);
-		table.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
+		table.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
 		table.setEnabled(false);
 		table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
 			@Override
@@ -146,21 +145,21 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					color = Color.LIGHT_GRAY;
 				}
 				c.setBackground(color);
-				if(dataPerByte.isSelected()) {
-					if(column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN) {
+				if (dataPerByte.isSelected()) {
+					if (column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN)
 						setHorizontalAlignment(SwingConstants.RIGHT);
-					}
-					else {
+					else if (column == storedRegisterColumn)
+						setHorizontalAlignment(SwingConstants.CENTER);
+					else
 						setHorizontalAlignment(SwingConstants.LEFT);
-					}
 				}
 				else {
-					if(column == WORD_COLUMN) {
+					if (column == WORD_COLUMN)
 						setHorizontalAlignment(SwingConstants.RIGHT);
-					}
-					else {
+					else if (column == storedRegisterColumn)
+						setHorizontalAlignment(SwingConstants.CENTER);
+					else
 						setHorizontalAlignment(SwingConstants.LEFT);
-					}
 				}
 				return c;
 			}
