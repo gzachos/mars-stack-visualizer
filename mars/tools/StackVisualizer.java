@@ -42,10 +42,10 @@ import mars.venus.VenusUI;
 public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	private static String name        = "Stack Visualizer";
-	private static String versionID   = "0.2";
+	private static String versionID   = "0.8";
 	private static String version     = "Version " + versionID + " (George Z. Zachos, Petros Manousis)";
 	private static String heading     = "Visualizing Stack Modification Operations";
-	private static String releaseDate = "28-Sep-2018";
+	private static String releaseDate = "22-Oct-2018";
 
 	private static boolean displayDataPerByte = false;
 
