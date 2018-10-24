@@ -75,7 +75,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int  I_RS_OPERAND_LIST_INDEX   = 0; // I-format RS (source register) index
 	private static final int  J_ADDR_OPERAND_LIST_INDEX = 0; // J-format Address index
 	private static final int  R_RS_OPERAND_LIST_INDEX   = 0; // R-format RS (source register) index
-	private static final int  INITIAL_ROW_COUNT         = 24;
+	private static final int  INITIAL_ROW_COUNT         = 30;
 	private static final int  INITIAL_MAX_SP_VALUE      = SP_INIT_ADDR + 3;
 	private static final int  maxSpValue                = INITIAL_MAX_SP_VALUE;
 	private static int        maxSpValueWordAligned     = SP_INIT_ADDR;
