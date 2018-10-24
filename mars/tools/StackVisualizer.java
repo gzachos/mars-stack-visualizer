@@ -130,7 +130,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		c.gridy = 0;
 		c.weighty = 1.0;
 		panel = new JPanel(new GridBagLayout());
-		panel.setPreferredSize(new Dimension(600, 650));
+		panel.setPreferredSize(new Dimension(600, 600));
 		for (String s : colNamesWhenDataPerByte)
 			tableModel.addColumn(s);
 		table = new JTable(tableModel);
