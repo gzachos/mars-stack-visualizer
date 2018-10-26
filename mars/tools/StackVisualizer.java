@@ -374,16 +374,34 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			tableModel.setValueAt(formatAddress(addr-3), row, ADDRESS_COLUMN);
 			try {
 				if (dataPerByte.isSelected()) {
-					for (int j = FIRST_BYTE_COLUMN; j <= LAST_BYTE_COLUMN; j++) {
+					for (int j = FIRST_BYTE_COLUMN; j <= LAST_BYTE_COLUMN; j++, addr--) {
+						int byteValue;
 						/*
 						 * Endianness determines whether byte position in value and
 						 * byte position in memory match.
 						 */
 						col = (endianness == LITTLE_ENDIAN) ? j : (LAST_BYTE_COLUMN-j) + FIRST_BYTE_COLUMN;
-						if (displayDataPerByte)
-							System.out.println("(" + row + "," + col + ") - " + addr +": " +
-									formatByteLengthMemContents(memInstance.getByte(addr)));
-						tableModel.setValueAt(formatByteLengthMemContents(memInstance.getByte(addr--)), row, col);
+						/*
+						 * MARS' check for addresses out of range is performed using word-aligned addresses.
+						 * This means that the word on Memory.stackBaseAddress (highest stack address) can
+						 * be accessed during word-length data operations but not during half-word or byte-length
+						 * operations. This behavior is asymmetrical among the three memory configurations
+						 * supported by MARS.
+						 */
+						if (addr >= Memory.stackBaseAddress && addr <= (Memory.stackBaseAddress+3)) {
+							int word = memInstance.getWordNoNotify(alignToCurrentWordBoundary(addr));
+							byteValue = (word >> (WORD_LENGTH_BYTES-j)) & 0xffff;
+							if (displayDataPerByte)
+								System.out.println("(" + row + "," + col + ") - " + addr +": " +
+										formatByteLengthMemContents(byteValue));
+							tableModel.setValueAt(formatByteLengthMemContents(byteValue), row, col);
+						} else {
+							byteValue = memInstance.getByte(addr);
+							if (displayDataPerByte)
+								System.out.println("(" + row + "," + col + ") - " + addr +": " +
+										formatByteLengthMemContents(byteValue));
+							tableModel.setValueAt(formatByteLengthMemContents(byteValue), row, col);
+						}
 					}
 				} else {
 					col = WORD_COLUMN;
