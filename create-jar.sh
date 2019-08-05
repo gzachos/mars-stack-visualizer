@@ -2,10 +2,13 @@
 
 NAME="$1"
 
-if [ -z "${NAME}" ]
+if [ "${NAME}" = "--help" ] || [ "${NAME}" = "-h" ]
 then
-	echo "USAGE: ./create-jar.sh JARNAME[.jar]"
+	echo "USAGE: ./create-jar.sh [JARNAME[.jar]]"
 	exit 1
+elif [ -z "${NAME}" ]
+then
+	NAME="Mars4_5-SV.jar"
 fi
 
 if [ "${NAME:(-4)}" != ".jar" ]
