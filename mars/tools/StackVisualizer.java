@@ -26,6 +26,7 @@ import javax.swing.table.DefaultTableModel;
 import mars.Globals;
 import mars.ProgramStatement;
 import mars.assembler.Symbol;
+import mars.assembler.SymbolTable;
 import mars.mips.hardware.AccessNotice;
 import mars.mips.hardware.AddressErrorException;
 import mars.mips.hardware.Memory;
@@ -38,7 +39,7 @@ import mars.simulator.BackStepper;
 import mars.util.Binary;
 import mars.venus.VenusUI;
 
-@SuppressWarnings({ "serial", "deprecation" })
+@SuppressWarnings({ "serial" })
 public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	private static String name        = "Stack Visualizer";
@@ -101,12 +102,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int  GRAY         = 0x999999;
 	private static final int  WHITE        = 0xFFFFFF;
 
-	private static ArrayList<?> textSymbols = null; // TODO verify generics
 	private static ArrayList<Integer> jumpAddresses = new ArrayList<Integer>();
 	private static boolean disabledBackStep = false;
 
-	private static boolean debug = false, printMemContents = false, debugBackStepper = false,
-			debugTextSymbols = false;
+	private static boolean debug = false, printMemContents = false, debugBackStepper = false;
 
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
@@ -257,7 +256,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					System.err.println("RunAssemble");
 					System.err.flush();
 				}
-				textSymbols = null;        // Clear labels
 				jumpAddresses.clear();     // Clear jump addresses
 
 				/* Reset the column holding the register name whose contents
@@ -286,7 +284,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					System.err.println("Assemble");
 					System.err.flush();
 				}
-				textSymbols = null;        // Clear labels
 				jumpAddresses.clear();     // Clear jump addresses
 
 				/* Reset the column holding the register name whose contents
@@ -452,17 +449,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 //		System.out.println(notice.accessIsFromMIPS() +" " + notice.accessIsFromGUI() + " " + notice);
 
-		if (textSymbols == null) { // TODO retrieve symbols after assemble. verify it works
-			textSymbols = Globals.program.getLocalSymbolTable().getTextSymbols();
-			if (debugTextSymbols) {
-				System.out.println(textSymbols.toString() + " " + textSymbols.size());
-				for (int i = 0; i < textSymbols.size(); i++) {
-					Symbol s = (Symbol) textSymbols.get(i);
-					System.out.println(s.getName() + " - " + s.getAddress());
-				}
-			}
-		}
-
 		if (!notice.accessIsFromMIPS())
 			return;
 
@@ -613,8 +599,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 //					System.out.println((i+1) + ": " + jumpAddresses.get(i));
 
 				try {
-					if (jumpAddresses.remove(jumpAddresses.size()-1) != callerStatement.getAddress())
-						System.out.println("Mismatching return address");
+					Integer rasTopAddress = jumpAddresses.remove(jumpAddresses.size()-1);
+					Integer callerStatementAddress = callerStatement.getAddress();
+					if (rasTopAddress.compareTo(callerStatementAddress) != 0) {
+						System.out.println("Mismatching return address: " + rasTopAddress + " - " + callerStatementAddress);
+					}
 				} catch (IndexOutOfBoundsException e) {
 					// Exception is thrown whenever function calling instructions are back-stepped (undone)
 					// and again executed. Undoing the last step is not supported!
@@ -652,21 +641,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	private String addrToTextSymbol(int address) {
-		if (textSymbols == null) {
-			// In this case we can retrieve text symbols here and not return null.
-			// textSymbols = Globals.program.getLocalSymbolTable().getTextSymbols();
-			return null;
-		}
-
-		if (!Memory.inTextSegment(address)) {
-			System.err.println("addrToTextSymbol() only works for text segment addresses");
-			return null;
-		}
-
-		for (int i = 0; i < textSymbols.size(); i++) {
-			Symbol s = (Symbol) textSymbols.get(i);
-			if (s.getAddress() == address)
-				return s.getName();
+		String addrStr = String.valueOf(address);
+		SymbolTable localSymTable = Globals.program.getLocalSymbolTable();
+		Symbol symbol = localSymTable.getSymbolGivenAddressLocalOrGlobal(addrStr);
+		if (symbol != null) {
+			System.out.println("Symbol: " + symbol.getName());
+			return symbol.getName();
 		}
 		System.err.println("addrToTextSymbol(): Error translating address to label");
 		return null;
