@@ -81,12 +81,16 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int  maxSpValue                = INITIAL_MAX_SP_VALUE;
 	private static int        maxSpValueWordAligned     = SP_INIT_ADDR;
 	private static String     regNameToBeStoredInStack  = null;
-	private static int        numberOfColumns           = 6; // 1: address, 2-5: bytes, 6: stored register
-	private static int        storedRegisterColumn      = numberOfColumns-1;
+	private static String     frameNameToBeCreated      = null;
+	private static int        numberOfColumns           = 7; // 1: address, 2-5: bytes, 6: stored register, 7: call layout
+	private static int        frameNameColOffsetFromEnd = 1;
+	private static int        storedRegColOffsetFromEnd = 2;
+	private static int        storedRegisterColumn      = numberOfColumns - storedRegColOffsetFromEnd;
+	private static int        frameNameColumn           = numberOfColumns - frameNameColOffsetFromEnd;
 
 	// GUI-Related fields
-	private static String[]   colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg"};
-	private static String[]   colNamesWhenNotDataPerByte = {"Address", "Word-length Data", "Stored Reg"};
+	private static String[]   colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg", "Call Layout"};
+	private static String[]   colNamesWhenNotDataPerByte = {"Address", "Word-length Data", "Stored Reg", "Call Layout"};
 	private JTable            table;
 	private JPanel            panel;
 	private JScrollPane       scrollPane;
@@ -156,10 +160,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				}
 				c.setBackground(new Color(color));
 				
+				// TODO: refactor
 				if (dataPerByte.isSelected()) {
 					if (column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN)
 						setHorizontalAlignment(SwingConstants.RIGHT);
-					else if (column == storedRegisterColumn)
+					else if (column == storedRegisterColumn || column == frameNameColumn)
 						setHorizontalAlignment(SwingConstants.CENTER);
 					else
 						setHorizontalAlignment(SwingConstants.LEFT);
@@ -167,7 +172,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				else {
 					if (column == WORD_COLUMN)
 						setHorizontalAlignment(SwingConstants.RIGHT);
-					else if (column == storedRegisterColumn)
+					else if (column == storedRegisterColumn || column == frameNameColumn)
 						setHorizontalAlignment(SwingConstants.CENTER);
 					else
 						setHorizontalAlignment(SwingConstants.LEFT);
@@ -225,18 +230,24 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	
 	private void transformTableModel(String columnNames[]) {
 		int rowCount = tableModel.getRowCount();
-		Object storedRedColumnData[] = new Object[rowCount];
-		for (int i = 0; i < rowCount; i++)
-			storedRedColumnData[i] = tableModel.getValueAt(i, storedRegisterColumn);
+		Object storedRegColumnData[] = new Object[rowCount];
+		Object frameNameColumnData[] = new Object[rowCount];
+		for (int i = 0; i < rowCount; i++) {
+			storedRegColumnData[i] = tableModel.getValueAt(i, storedRegisterColumn);
+			frameNameColumnData[i] = tableModel.getValueAt(i, frameNameColumn);
+		}
 		
 		tableModel.setColumnCount(0);	// clearing columns of table
 		for (String s : columnNames) {
 			tableModel.addColumn(s);	// setting new columns
 		}
 		numberOfColumns = tableModel.getColumnCount();
-		storedRegisterColumn = numberOfColumns - 1;
-		for (int i = 0; i < rowCount; i++)
-			tableModel.setValueAt(storedRedColumnData[i], i, storedRegisterColumn);
+		storedRegisterColumn = numberOfColumns - storedRegColOffsetFromEnd;
+		frameNameColumn = numberOfColumns - frameNameColOffsetFromEnd;
+		for (int i = 0; i < rowCount; i++) {
+			tableModel.setValueAt(storedRegColumnData[i], i, storedRegisterColumn);
+			tableModel.setValueAt(frameNameColumnData[i], i, frameNameColumn);
+		}
 		getStackData();
 		table.repaint();
 	}
@@ -261,8 +272,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				/* Reset the column holding the register name whose contents
 				 * were stored in the corresponding memory address.
 				 */
-				for (int i = 0; i < tableModel.getRowCount(); i++)
+				for (int i = 0; i < tableModel.getRowCount(); i++) {
 					tableModel.setValueAt("", i, storedRegisterColumn);
+					tableModel.setValueAt("", i, frameNameColumn);
+				}
 
 				runButtonsSetEnabled(true);
 
@@ -289,8 +302,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				/* Reset the column holding the register name whose contents
 				 * were stored in the corresponding memory address.
 				 */
-				for (int i = 0; i < tableModel.getRowCount(); i++)
+				for (int i = 0; i < tableModel.getRowCount(); i++) {
 					tableModel.setValueAt("", i, storedRegisterColumn);
+					tableModel.setValueAt("", i, frameNameColumn);
+				}
 
 				runButtonsSetEnabled(true);
 
@@ -413,7 +428,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					} else {
 						System.out.print(tableModel.getValueAt(row, WORD_COLUMN));
 					}
-					System.out.println(" (" + tableModel.getValueAt(row, storedRegisterColumn) + ")");
+					System.out.print(" (" + tableModel.getValueAt(row, storedRegisterColumn) + ")");
+					System.out.println(" [" + tableModel.getValueAt(row, frameNameColumn) + "]");
 				}
 			} catch (AddressErrorException aee) {
 				aee.printStackTrace();
@@ -492,7 +508,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	private void processStackMemoryUpdate(MemoryAccessNotice notice) {
-		String regName;
+		String regName, frameName;
 
 		if (notice.getAccessType() == AccessNotice.READ)
 			return;
@@ -502,6 +518,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			regNameToBeStoredInStack = null;
 		} else {
 			regName = "";
+		}
+		
+		if (frameNameToBeCreated != null) {
+			frameName = frameNameToBeCreated;
+			frameNameToBeCreated = null;
+		} else {
+			frameName = "";
 		}
 
 		if (debug) {
@@ -517,6 +540,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			System.out.println("Addr: " + formatAddress(notice.getAddress()) + " - tableIndex: " + row + " (" + regName + ")");
 
 		tableModel.setValueAt(regName, row, storedRegisterColumn);
+		tableModel.setValueAt(frameName, row, frameNameColumn);
 		getStackData();
 		table.repaint();
 	}
@@ -574,8 +598,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			else if (isJumpInstruction(instrName) || isJumpAndLinkInstruction(instrName)) {
 				int targetAdrress = stmnt.getOperand(J_ADDR_OPERAND_LIST_INDEX) * 4;
 				String targetLabel = addrToTextSymbol(targetAdrress);
-				if (isJumpAndLinkInstruction(instrName))
+				if (isJumpAndLinkInstruction(instrName)) {
 					ras.add(stmnt.getAddress());
+					frameNameToBeCreated = targetLabel;
+				}
 				if (targetLabel != null) {
 					if (debug)
 						System.out.print("Jumping to: " + targetLabel);
@@ -645,7 +671,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		SymbolTable localSymTable = Globals.program.getLocalSymbolTable();
 		Symbol symbol = localSymTable.getSymbolGivenAddressLocalOrGlobal(addrStr);
 		if (symbol != null) {
-			System.out.println("Symbol: " + symbol.getName());
+			// System.out.println("Symbol: " + symbol.getName());
 			return symbol.getName();
 		}
 		System.err.println("addrToTextSymbol(): Error translating address to label");
