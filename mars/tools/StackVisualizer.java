@@ -94,15 +94,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private int               spDataColumnIndex = LAST_BYTE_COLUMN;
 	private DefaultTableModel tableModel = new DefaultTableModel();
 	private JCheckBox         dataPerByte;
-	private JCheckBox         hexadecimalAddresses;
-	private JCheckBox         hexadecimalValues;
+	private JCheckBox         hexAddressesCheckBox;
+	private JCheckBox         hexValuesCheckBox;
 	private static final int  LIGHT_YELLOW = 0xFFFF99;
 	private static final int  LIGHT_ORANGE = 0xFFC266;
 	private static final int  LIGHT_GRAY   = 0xE0E0E0;
 	private static final int  GRAY         = 0x999999;
 	private static final int  WHITE        = 0xFFFFFF;
 
-	private static ArrayList<Integer> jumpAddresses = new ArrayList<Integer>();
+	private static ArrayList<Integer> ras = new ArrayList<Integer>(); // Return Address Stack
 	private static boolean disabledBackStep = false;
 
 	private static boolean debug = false, printMemContents = false, debugBackStepper = false;
@@ -198,28 +198,28 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		});
 
 		c.gridy++;	// change line
-		hexadecimalAddresses = new JCheckBox("Hexadecimal Addresses");
-		hexadecimalAddresses.addActionListener(new ActionListener() {
+		hexAddressesCheckBox = new JCheckBox("Hexadecimal Addresses");
+		hexAddressesCheckBox.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				getStackData();
 				table.repaint();
 			}
 		});
-		hexadecimalAddresses.setSelected(true);
-		panel.add(hexadecimalAddresses, c);
+		hexAddressesCheckBox.setSelected(true);
+		panel.add(hexAddressesCheckBox, c);
 
 		c.gridy++;	// change line
-		hexadecimalValues = new JCheckBox("Hexadecimal Values");
-		hexadecimalValues.addActionListener(new ActionListener() {
+		hexValuesCheckBox = new JCheckBox("Hexadecimal Values");
+		hexValuesCheckBox.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				getStackData();
 				table.repaint();
 			}
 		});
-		hexadecimalValues.setSelected(true);
-		panel.add(hexadecimalValues, c);
+		hexValuesCheckBox.setSelected(true);
+		panel.add(hexValuesCheckBox, c);
 		return panel;
 	}
 	
@@ -256,7 +256,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					System.err.println("RunAssemble");
 					System.err.flush();
 				}
-				jumpAddresses.clear();     // Clear jump addresses
+				ras.clear();     // Clear return address stack
 
 				/* Reset the column holding the register name whose contents
 				 * were stored in the corresponding memory address.
@@ -284,7 +284,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					System.err.println("Assemble");
 					System.err.flush();
 				}
-				jumpAddresses.clear();     // Clear jump addresses
+				ras.clear();     // Clear Return Address Stack
 
 				/* Reset the column holding the register name whose contents
 				 * were stored in the corresponding memory address.
@@ -575,12 +575,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				int targetAdrress = stmnt.getOperand(J_ADDR_OPERAND_LIST_INDEX) * 4;
 				String targetLabel = addrToTextSymbol(targetAdrress);
 				if (isJumpAndLinkInstruction(instrName))
-					jumpAddresses.add(stmnt.getAddress());
+					ras.add(stmnt.getAddress());
 				if (targetLabel != null) {
 					if (debug)
 						System.out.print("Jumping to: " + targetLabel);
 					if (debug && isJumpAndLinkInstruction(instrName))
-						System.out.println(" (" + (jumpAddresses.size()) + ")");
+						System.out.println(" (" + (ras.size()) + ")");
 				}
 			}
 			else if (isJumpRegInstruction(instrName)) {
@@ -592,14 +592,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				ProgramStatement callerStatement =  memInstance.getStatementNoNotify(targetAddress-4);
 				if (debug) {
 					System.out.println("Returning from: " + addrToTextSymbol(callerStatement.getOperand(0)*4) +
-							" (" +jumpAddresses.size() + ") to line: " + callerStatement.getSourceLine());
+							" (" +ras.size() + ") to line: " + callerStatement.getSourceLine());
 				}
 //				System.out.println(jumpAddresses.get(jumpAddresses.size()-1) + " == " + callerStatement.getAddress());
 //				for (int i = 0; i< jumpAddresses.size(); i++)
 //					System.out.println((i+1) + ": " + jumpAddresses.get(i));
 
 				try {
-					Integer rasTopAddress = jumpAddresses.remove(jumpAddresses.size()-1);
+					Integer rasTopAddress = ras.remove(ras.size()-1);
 					Integer callerStatementAddress = callerStatement.getAddress();
 					if (rasTopAddress.compareTo(callerStatementAddress) != 0) {
 						System.out.println("Mismatching return address: " + rasTopAddress + " - " + callerStatementAddress);
@@ -711,14 +711,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	private String formatAddress(int address) {
-		if (hexadecimalAddresses.isSelected())
+		if (hexAddressesCheckBox.isSelected())
 			return Binary.intToHexString(address);
 		else
 			return Integer.toString(address);
 	}
 
 	private String formatWordLengthMemContents(int data) {
-		if (hexadecimalValues.isSelected())
+		if (hexValuesCheckBox.isSelected())
 			return intTo8DigitHexStringNoPrefix(data);
 		else
 			return Integer.toString(data);
@@ -733,7 +733,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	private String formatByteLengthMemContents(int data) {
-		if (hexadecimalValues.isSelected())
+		if (hexValuesCheckBox.isSelected())
 			return intTo2DigitHexStringNoPrefix(data);
 		else
 			return Integer.toString(data);
