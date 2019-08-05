@@ -159,7 +159,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 						color = LIGHT_GRAY;
 				}
 				c.setBackground(new Color(color));
-				
+
 				// TODO: refactor
 				if (dataPerByte.isSelected()) {
 					if (column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN)
@@ -227,7 +227,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		panel.add(hexValuesCheckBox, c);
 		return panel;
 	}
-	
+
 	private void transformTableModel(String columnNames[]) {
 		int rowCount = tableModel.getRowCount();
 		Object storedRegColumnData[] = new Object[rowCount];
@@ -236,7 +236,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			storedRegColumnData[i] = tableModel.getValueAt(i, storedRegisterColumn);
 			frameNameColumnData[i] = tableModel.getValueAt(i, frameNameColumn);
 		}
-		
+
 		tableModel.setColumnCount(0);	// clearing columns of table
 		for (String s : columnNames) {
 			tableModel.addColumn(s);	// setting new columns
@@ -519,7 +519,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		} else {
 			regName = "";
 		}
-		
+
 		if (frameNameToBeCreated != null) {
 			frameName = frameNameToBeCreated;
 			frameNameToBeCreated = null;
@@ -550,7 +550,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			System.err.println("getTableRowIndex() only works for stack segment addresses");
 			return -1;
 		}
-		return (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
+		int rowIndex = (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
+		if (rowIndex > tableModel.getRowCount()) {
+			// TODO: export a function for adding more table rows
+			for (int i = 0; i < rowIndex - tableModel.getRowCount() + 10; i++)
+				tableModel.addRow(new Object[numberOfColumns]);
+			getStackData();
+			table.repaint();
+		}
+		return rowIndex;
 	}
 
 	private int getTableColumnIndex(int memAddress) {
