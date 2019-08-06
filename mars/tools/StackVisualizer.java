@@ -23,6 +23,8 @@ import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumn;
+import javax.swing.table.TableColumnModel;
 
 import mars.Globals;
 import mars.ProgramStatement;
@@ -108,6 +110,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static final int  LIGHT_GRAY   = 0xE0E0E0;
 	private static final int  GRAY         = 0x999999;
 	private static final int  WHITE        = 0xFFFFFF;
+	private int               windowHeight = 600;
+	private int               windowWidth  = 600;
 
 	private static ArrayList<Integer> ras = new ArrayList<Integer>(); // Return Address Stack
 	private static boolean disabledBackStep = false;
@@ -136,7 +140,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		c.gridy = 0;
 		c.weighty = 1.0;
 		panel = new JPanel(new GridBagLayout());
-		panel.setPreferredSize(new Dimension(600, 600));
+		panel.setPreferredSize(new Dimension(windowWidth, windowHeight));
 		for (String s : colNamesWhenDataPerByte)
 			tableModel.addColumn(s);
 		table = new JTable(tableModel);
@@ -163,26 +167,19 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				}
 				c.setBackground(new Color(color));
 
-				// TODO: refactor
-				if (dataPerByte.isSelected()) {
-					if (column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN)
-						setHorizontalAlignment(SwingConstants.RIGHT);
-					else if (column == storedRegisterColumn || column == frameNameColumn)
-						setHorizontalAlignment(SwingConstants.CENTER);
-					else
-						setHorizontalAlignment(SwingConstants.LEFT);
-				}
-				else {
-					if (column == WORD_COLUMN)
-						setHorizontalAlignment(SwingConstants.RIGHT);
-					else if (column == storedRegisterColumn || column == frameNameColumn)
-						setHorizontalAlignment(SwingConstants.CENTER);
-					else
-						setHorizontalAlignment(SwingConstants.LEFT);
-				}
+				if ((dataPerByte.isSelected() && column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN) ||
+						(!dataPerByte.isSelected() && column == WORD_COLUMN))
+					setHorizontalAlignment(SwingConstants.RIGHT);
+				else if (column == storedRegisterColumn || column == frameNameColumn)
+					setHorizontalAlignment(SwingConstants.CENTER);
+				else
+					setHorizontalAlignment(SwingConstants.LEFT);
 				return c;
 			}
 		});
+		// table.setAutoResizeMode( JTable.AUTO_RESIZE_OFF );
+		resizeTableColumns(true);
+
 		scrollPane = new JScrollPane(table);
 		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 		scrollPane.setVisible(true);
@@ -231,6 +228,37 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		return panel;
 	}
 
+	private void resizeTableColumns(boolean dataPerByte) {
+		TableColumnModel columnModel = table.getColumnModel();
+		for (int colIndex = 0 ; colIndex < columnModel.getColumnCount(); colIndex++) {
+			TableColumn col = columnModel.getColumn(colIndex);
+			int min, pref;
+			min = pref = 75;
+			if (dataPerByte) {
+				if (colIndex >= FIRST_BYTE_COLUMN && colIndex <= LAST_BYTE_COLUMN) {
+					min = 25;
+					pref = 50;
+				} else if (colIndex == ADDRESS_COLUMN) {
+					min = 75;
+					pref = 100;
+				} else if (colIndex == storedRegisterColumn) {
+					min = 25;
+					pref = 75;
+				} else if (colIndex == frameNameColumn) {
+					min = 25;
+					pref = 150;
+				}
+			} else {
+				if (colIndex == frameNameColumn) {
+					min = 25;
+					pref = 150;
+				}
+			}
+			col.setMinWidth(min);
+			col.setPreferredWidth(pref);
+		}
+	}
+
 	private void transformTableModel(String columnNames[]) {
 		int rowCount = tableModel.getRowCount();
 		Object storedRegColumnData[] = new Object[rowCount];
@@ -240,6 +268,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			frameNameColumnData[i] = tableModel.getValueAt(i, frameNameColumn);
 		}
 
+		table.setVisible(false);   // Used to avoid rendering delays
 		tableModel.setColumnCount(0);	// clearing columns of table
 		for (String s : columnNames) {
 			tableModel.addColumn(s);	// setting new columns
@@ -247,12 +276,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		numberOfColumns = tableModel.getColumnCount();
 		storedRegisterColumn = numberOfColumns - storedRegColOffsetFromEnd;
 		frameNameColumn = numberOfColumns - frameNameColOffsetFromEnd;
+		resizeTableColumns(dataPerByte.isSelected());
 		for (int i = 0; i < rowCount; i++) {
 			tableModel.setValueAt(storedRegColumnData[i], i, storedRegisterColumn);
 			tableModel.setValueAt(frameNameColumnData[i], i, frameNameColumn);
 		}
 		getStackData();
 		table.repaint();
+		table.setVisible(true);
 	}
 
 	@Override
@@ -496,8 +527,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			System.out.println("\nRegisterAccessNotice (W): " + notice.getRegisterName() + " value: " + getSpValue());
 
 		if (notice.getRegisterName().equals("$sp")) {
+			int oldSpDataRowIndex = spDataRowIndex;
 			spDataRowIndex = getTableRowIndex(getSpValue());
 			spDataColumnIndex = getTableColumnIndex(getSpValue());
+			for (int row = spDataRowIndex + 1; row <= oldSpDataRowIndex; row++) {
+				tableModel.setValueAt("", row, storedRegisterColumn);
+				tableModel.setValueAt("", row, frameNameColumn);
+			}
 //			 System.out.println("SP value: " + formatAddress(getSpValue()) + " - tableIndex: " + spDataRowIndex);
 			// Add more rows if we are reaching current row count
 			if (spDataRowIndex + 5 > tableModel.getRowCount()) {
@@ -607,7 +643,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				regNameToBeStoredInStack = RegisterFile.getRegisters()[operands[I_RS_OPERAND_LIST_INDEX]].getName();
 			}
 			else if (isJumpInstruction(instrName) || isJumpAndLinkInstruction(instrName)) {
-				int targetAdrress = stmnt.getOperand(J_ADDR_OPERAND_LIST_INDEX) * 4;
+				int targetAdrress = stmnt.getOperand(J_ADDR_OPERAND_LIST_INDEX) * WORD_LENGTH_BYTES;
 				String targetLabel = addrToTextSymbol(targetAdrress);
 				if (isJumpAndLinkInstruction(instrName)) {
 					ras.add(stmnt.getAddress());
@@ -624,26 +660,24 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			}
 			else if (isJumpRegInstruction(instrName)) {
 				int targetRegister = stmnt.getOperand(R_RS_OPERAND_LIST_INDEX);
+				// TODO: check $ra only (?)
 				Register reg = RegisterFile.getRegisters()[targetRegister];
-				int targetAddress = reg.getValue();
-				// targetAddress-4 is needed as PC+4 is stored in $ra when jal is executed.
-				// TODO: Verify it always works
-				ProgramStatement callerStatement =  memInstance.getStatementNoNotify(targetAddress-4);
-				String exitingSubroutineName = addrToTextSymbol(callerStatement.getOperand(0)*4);
+				int returnAddress = reg.getValue();
+				// returnAddress-4 is needed as PC+4 is stored in $ra when jal is executed.
+				int jalStatementAddress = returnAddress - WORD_LENGTH_BYTES;
+				ProgramStatement jalStatement =  memInstance.getStatementNoNotify(jalStatementAddress);
+				int jalTargetAddress = jalStatement.getOperand(J_ADDR_OPERAND_LIST_INDEX) * WORD_LENGTH_BYTES;
+				String exitingSubroutineName = addrToTextSymbol(jalTargetAddress);
 				activeFunctionCallStats.removeCall(exitingSubroutineName);
 				if (debug) {
 					System.out.println("Returning from: " + exitingSubroutineName + " (" +ras.size() +
-							") to line: " + callerStatement.getSourceLine());
+							") to line: " + jalStatement.getSourceLine());
 				}
-//				System.out.println(jumpAddresses.get(jumpAddresses.size()-1) + " == " + callerStatement.getAddress());
-//				for (int i = 0; i< jumpAddresses.size(); i++)
-//					System.out.println((i+1) + ": " + jumpAddresses.get(i));
 
 				try {
 					Integer rasTopAddress = ras.remove(ras.size()-1);
-					Integer callerStatementAddress = callerStatement.getAddress();
-					if (rasTopAddress.compareTo(callerStatementAddress) != 0) {
-						System.out.println("Mismatching return address: " + rasTopAddress + " - " + callerStatementAddress);
+					if (rasTopAddress.compareTo(jalStatementAddress) != 0) {
+						System.out.println("Mismatching return address: " + rasTopAddress + " - " + jalStatementAddress);
 					}
 				} catch (IndexOutOfBoundsException e) {
 					// Exception is thrown whenever function calling instructions are back-stepped (undone)
@@ -803,6 +837,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			System.out.flush();
 			System.err.println("ResetAction");
 			System.err.flush();
+		}
+		for (int i = spDataRowIndex+1; i < table.getRowCount(); i++) {
+			tableModel.setValueAt("", i, storedRegisterColumn);
+			tableModel.setValueAt("", i, frameNameColumn);
 		}
 		getStackData();
 		spDataRowIndex = getTableRowIndex(getSpValue());
