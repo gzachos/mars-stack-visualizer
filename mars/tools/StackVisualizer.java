@@ -9,6 +9,7 @@ import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Observable;
 
 import javax.swing.JButton;
@@ -87,6 +88,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static int        storedRegColOffsetFromEnd = 2;
 	private static int        storedRegisterColumn      = numberOfColumns - storedRegColOffsetFromEnd;
 	private static int        frameNameColumn           = numberOfColumns - frameNameColOffsetFromEnd;
+
+	private static ActiveFunctionCallStats activeFunctionCallStats = new ActiveFunctionCallStats();
 
 	// GUI-Related fields
 	private static String[]   colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg", "Call Layout"};
@@ -609,6 +612,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				if (isJumpAndLinkInstruction(instrName)) {
 					ras.add(stmnt.getAddress());
 					frameNameToBeCreated = targetLabel;
+					Integer count = activeFunctionCallStats.addCall(targetLabel);
+					frameNameToBeCreated += " (" + count + ")";
 				}
 				if (targetLabel != null) {
 					if (debug)
@@ -624,9 +629,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				// targetAddress-4 is needed as PC+4 is stored in $ra when jal is executed.
 				// TODO: Verify it always works
 				ProgramStatement callerStatement =  memInstance.getStatementNoNotify(targetAddress-4);
+				String exitingSubroutineName = addrToTextSymbol(callerStatement.getOperand(0)*4);
+				activeFunctionCallStats.removeCall(exitingSubroutineName);
 				if (debug) {
-					System.out.println("Returning from: " + addrToTextSymbol(callerStatement.getOperand(0)*4) +
-							" (" +ras.size() + ") to line: " + callerStatement.getSourceLine());
+					System.out.println("Returning from: " + exitingSubroutineName + " (" +ras.size() +
+							") to line: " + callerStatement.getSourceLine());
 				}
 //				System.out.println(jumpAddresses.get(jumpAddresses.size()-1) + " == " + callerStatement.getAddress());
 //				for (int i = 0; i< jumpAddresses.size(); i++)
@@ -836,6 +843,35 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	private void showMessageWindow(String message) {
 		JOptionPane.showMessageDialog(theWindow, message);
+	}
+
+	// Class definition
+	private static class ActiveFunctionCallStats {
+		private HashMap<String, Integer> activeCalls;
+
+		public ActiveFunctionCallStats() {
+			activeCalls = new HashMap<>(0);
+		}
+
+		public Integer addCall(String subroutineName) {
+			Integer newValue;
+			if (activeCalls.containsKey(subroutineName)) {
+				newValue = activeCalls.get(subroutineName) + 1;
+				activeCalls.replace(subroutineName, newValue);
+			} else {
+				activeCalls.put(subroutineName, 1);
+				newValue = 1;
+			}
+			return newValue;
+		}
+
+		public void removeCall(String subroutineName) {
+			Integer oldValue = activeCalls.get(subroutineName);
+			if (oldValue == null)
+				System.err.println("ActiveFunctionCallStats.removeCall: " + subroutineName + " doesn't exist");
+			else
+				activeCalls.replace(subroutineName, oldValue - 1);
+		}
 	}
 
 }
