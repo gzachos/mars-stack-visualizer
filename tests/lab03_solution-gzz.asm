@@ -9,6 +9,11 @@
         # Data input.
         ###############################################################################
        .data
+# Leaving a 2 word (= 1 list node) offset so that the address of n1_d isn't 0x0 (null pointer)
+# in "Compact, Data at Address 0" memory configuration.
+offset_d: .word 0x7777
+offset_n: .word 0x7777
+
 # 1st item - head of the list!
 n1_d: .word 1
 n1_n: .word n2_d  # point to (beginning of) n2
