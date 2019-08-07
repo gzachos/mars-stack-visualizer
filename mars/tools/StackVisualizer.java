@@ -51,7 +51,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static String heading     = "Visualizing Stack Modification Operations";
 	private static String releaseDate = "24-Oct-2018";
 
-	private static boolean displayDataPerByte = false;
+	// We need this definition here to initialize numberOfColumns
+	private final String[] colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg", "Call Layout"};
+	private final String[] colNamesWhenNotDataPerByte = {"Address", "Word-length Data", "Stored Reg", "Call Layout"};
 
 	/*
 	 * Memory.stackBaseAddress:  word-aligned
@@ -62,61 +64,59 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 * Stack grows towards lower addresses: .stackBaseAddress > .stackLimitAddress
 	 * Word-length operations can take place in both .stackBaseAddress and .stackLimitAddress
 	 */
-	private static final int SP_REG_NUMBER = RegisterFile.STACK_POINTER_REGISTER;
-	private static final int SP_INIT_ADDR  = Memory.stackPointer;
-	private static Memory    memInstance   = Memory.getInstance();
-	private static boolean   endianness    = memInstance.getByteOrder();
-	private static VenusUI   marsGui       = Globals.getGui();
-	private static final boolean LITTLE_ENDIAN = Memory.LITTLE_ENDIAN;
-
-	private static final int  WORD_LENGTH_BYTES         = Memory.WORD_LENGTH_BYTES;
-	private static final int  WORD_LENGTH_BITS          = WORD_LENGTH_BYTES * 8;
-
-	private static final int  ADDRESS_COLUMN            = 0; // Should always be in first column.
-	private static final int  FIRST_BYTE_COLUMN         = 1; // Should always be in second column.
-	private static final int  LAST_BYTE_COLUMN          = FIRST_BYTE_COLUMN + WORD_LENGTH_BYTES - 1;
-	private static final int  WORD_COLUMN               = 1;
-	private static final int  I_RS_OPERAND_LIST_INDEX   = 0; // I-format RS (source register) index
-	private static final int  J_ADDR_OPERAND_LIST_INDEX = 0; // J-format Address index
-	private static final int  R_RS_OPERAND_LIST_INDEX   = 0; // R-format RS (source register) index
-	private static final int  INITIAL_ROW_COUNT         = 30;
-	private static final int  INITIAL_MAX_SP_VALUE      = SP_INIT_ADDR + 3;
-	private static final int  maxSpValue                = INITIAL_MAX_SP_VALUE;
-	private static int        maxSpValueWordAligned     = SP_INIT_ADDR;
-	private static String     regNameToBeStoredInStack  = null;
-	private static String     frameNameToBeCreated      = null;
-	private static int        numberOfColumns           = 7; // 1: address, 2-5: bytes, 6: stored register, 7: call layout
-	private static int        frameNameColOffsetFromEnd = 1;
-	private static int        storedRegColOffsetFromEnd = 2;
-	private static int        storedRegisterColumn      = numberOfColumns - storedRegColOffsetFromEnd;
-	private static int        frameNameColumn           = numberOfColumns - frameNameColOffsetFromEnd;
-
-	private static ActiveFunctionCallStats activeFunctionCallStats = new ActiveFunctionCallStats();
+	private final int     SP_REG_NUMBER             = RegisterFile.STACK_POINTER_REGISTER;
+	private final int     SP_INIT_ADDR              = Memory.stackPointer;
+	private final Memory  memInstance               = Memory.getInstance();
+	private final boolean endianness                = memInstance.getByteOrder();
+	private final boolean LITTLE_ENDIAN             = Memory.LITTLE_ENDIAN;
+	private final int     WORD_LENGTH_BYTES         = Memory.WORD_LENGTH_BYTES;
+	private final int     WORD_LENGTH_BITS          = WORD_LENGTH_BYTES * 8;
+	private final int     I_RS_OPERAND_LIST_INDEX   = 0; // I-format RS (source register) index
+	private final int     J_ADDR_OPERAND_LIST_INDEX = 0; // J-format Address index
+	private final int     R_RS_OPERAND_LIST_INDEX   = 0; // R-format RS (source register) index
+	private final int     INITIAL_MAX_SP_VALUE      = SP_INIT_ADDR + (WORD_LENGTH_BYTES - 1);
+	private int           maxSpValue                = INITIAL_MAX_SP_VALUE;
+	private int           maxSpValueWordAligned     = SP_INIT_ADDR;
+	private String        regNameToBeStoredInStack  = null;
+	private String        frameNameToBeCreated      = null;
+	private final ArrayList<Integer> ras            = new ArrayList<Integer>(); // Return Address Stack
+	private final ActiveFunctionCallStats activeFunctionCallStats = new ActiveFunctionCallStats();
 
 	// GUI-Related fields
-	private static String[]   colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg", "Call Layout"};
-	private static String[]   colNamesWhenNotDataPerByte = {"Address", "Word-length Data", "Stored Reg", "Call Layout"};
-	private JTable            table;
-	private JPanel            panel;
-	private JScrollPane       scrollPane;
-	private int               spDataRowIndex = 0;
-	private int               spDataColumnIndex = LAST_BYTE_COLUMN;
-	private DefaultTableModel tableModel = new DefaultTableModel();
-	private JCheckBox         dataPerByte;
-	private JCheckBox         hexAddressesCheckBox;
-	private JCheckBox         hexValuesCheckBox;
-	private static final int  LIGHT_YELLOW = 0xFFFF99;
-	private static final int  LIGHT_ORANGE = 0xFFC266;
-	private static final int  LIGHT_GRAY   = 0xE0E0E0;
-	private static final int  GRAY         = 0x999999;
-	private static final int  WHITE        = 0xFFFFFF;
-	private int               windowHeight = 600;
-	private int               windowWidth  = 600;
+	private final VenusUI marsGui                   = Globals.getGui();
+	private final int     windowWidth               = 600;
+	private final int     windowHeight              = 600;
+	private final int     ADDRESS_COLUMN            = 0;  // Should always be in first column.
+	private final int     FIRST_BYTE_COLUMN         = 1;  // Should always be in second column.
+	private final int     LAST_BYTE_COLUMN          = FIRST_BYTE_COLUMN + (WORD_LENGTH_BYTES - 1);
+	private final int     WORD_COLUMN               = 1;
+	private final int     INITIAL_ROW_COUNT         = 30;
+	private int           numberOfColumns           = colNamesWhenDataPerByte.length;
+	private int           numberOfRows              = -1;
+	private final int     frameNameColOffsetFromEnd = 1;
+	private final int     storedRegColOffsetFromEnd = 2;
+	private int           storedRegisterColumn      = numberOfColumns - storedRegColOffsetFromEnd;
+	private int           frameNameColumn           = numberOfColumns - frameNameColOffsetFromEnd;
+	private final int     REMAINING_ROWS_THRESHOLD  = 5;
+	private int           spDataRowIndex            = 0;
+	private int           spDataColumnIndex         = LAST_BYTE_COLUMN;
+	private JTable        table;
+	private JPanel        panel;
+	private JScrollPane   scrollPane;
+	private JCheckBox     dataPerByte;
+	private JCheckBox     hexAddressesCheckBox;
+	private JCheckBox     hexValuesCheckBox;
+	private final int     LIGHT_YELLOW = 0xFFFF99;
+	private final int     LIGHT_ORANGE = 0xFFC266;
+	private final int     LIGHT_GRAY   = 0xE0E0E0;
+	private final int     GRAY         = 0x999999;
+	private final int     WHITE        = 0xFFFFFF;
+	private boolean       disabledBackStep = false;
+	private final DefaultTableModel tableModel = new DefaultTableModel();
 
-	private static ArrayList<Integer> ras = new ArrayList<Integer>(); // Return Address Stack
-	private static boolean disabledBackStep = false;
-
-	private static boolean debug = false, printMemContents = false, debugBackStepper = false;
+	// Debug-related data
+	private final boolean debug = false, printMemContents = false, debugBackStepper = false;
+	private final boolean displayDataPerByte = false;
 
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
@@ -260,26 +260,32 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	private void transformTableModel(String columnNames[]) {
-		int rowCount = tableModel.getRowCount();
-		Object storedRegColumnData[] = new Object[rowCount];
-		Object frameNameColumnData[] = new Object[rowCount];
-		for (int i = 0; i < rowCount; i++) {
-			storedRegColumnData[i] = tableModel.getValueAt(i, storedRegisterColumn);
-			frameNameColumnData[i] = tableModel.getValueAt(i, frameNameColumn);
+		Object storedRegColumnData[] = new Object[numberOfRows];
+		Object frameNameColumnData[] = new Object[numberOfRows];
+
+		// Backup toredRegister and frameName columns
+		for (int row = 0; row < numberOfRows; row++) {
+			storedRegColumnData[row] = tableModel.getValueAt(row, storedRegisterColumn);
+			frameNameColumnData[row] = tableModel.getValueAt(row, frameNameColumn);
 		}
 
 		table.setVisible(false);   // Used to avoid rendering delays
-		tableModel.setColumnCount(0);	// clearing columns of table
+		tableModel.setColumnCount(0);	// Clear table columns
 		for (String s : columnNames) {
-			tableModel.addColumn(s);	// setting new columns
+			tableModel.addColumn(s);	// Add new table columns
 		}
+
+		// Update table-related data
 		numberOfColumns = tableModel.getColumnCount();
+		numberOfRows = tableModel.getRowCount();
 		storedRegisterColumn = numberOfColumns - storedRegColOffsetFromEnd;
 		frameNameColumn = numberOfColumns - frameNameColOffsetFromEnd;
 		resizeTableColumns(dataPerByte.isSelected());
-		for (int i = 0; i < rowCount; i++) {
-			tableModel.setValueAt(storedRegColumnData[i], i, storedRegisterColumn);
-			tableModel.setValueAt(frameNameColumnData[i], i, frameNameColumn);
+
+		// Restore toredRegister and frameName columns
+		for (int row = 0; row < numberOfRows; row++) {
+			tableModel.setValueAt(storedRegColumnData[row], row, storedRegisterColumn);
+			tableModel.setValueAt(frameNameColumnData[row], row, frameNameColumn);
 		}
 		getStackData();
 		table.repaint();
@@ -288,6 +294,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	@Override
 	protected void initializePreGUI() {
+		// TODO: disable reset button too?
 
 		// TODO: disable actions performed when Tool not connected!
 		marsGui.getRunAssembleItem().addActionListener(new ActionListener() {
@@ -301,22 +308,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					System.err.println("RunAssemble");
 					System.err.flush();
 				}
-				ras.clear();     // Clear return address stack
-
-				/* Reset the column holding the register name whose contents
-				 * were stored in the corresponding memory address.
-				 */
-				for (int i = 0; i < tableModel.getRowCount(); i++) {
-					tableModel.setValueAt("", i, storedRegisterColumn);
-					tableModel.setValueAt("", i, frameNameColumn);
-				}
-
 				runButtonsSetEnabled(true);
-
-				getStackData();
-				spDataRowIndex = getTableRowIndex(getSpValue());
-				spDataColumnIndex = getTableColumnIndex(getSpValue());
-				table.repaint();
+				reset();
 			}
 		});
 
@@ -331,22 +324,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					System.err.println("Assemble");
 					System.err.flush();
 				}
-				ras.clear();     // Clear Return Address Stack
-
-				/* Reset the column holding the register name whose contents
-				 * were stored in the corresponding memory address.
-				 */
-				for (int i = 0; i < tableModel.getRowCount(); i++) {
-					tableModel.setValueAt("", i, storedRegisterColumn);
-					tableModel.setValueAt("", i, frameNameColumn);
-				}
-
 				runButtonsSetEnabled(true);
-
-				getStackData();
-				spDataRowIndex = getTableRowIndex(getSpValue());
-				spDataColumnIndex = getTableColumnIndex(getSpValue());
-				table.repaint();
+				reset();
 			}
 		});
 
@@ -373,8 +352,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 //					marsGui.getRunBackstepAction().isEnabled(); // TODO disable?
 					disableBackStepper();
 					getStackData();
-					spDataRowIndex = getTableRowIndex(getSpValue());
-					spDataColumnIndex = getTableColumnIndex(getSpValue());
+					updateSpDataRowColIndex();
 					table.repaint();
 
 					String msg = "Back Stepping has been disabled.\n"
@@ -384,11 +362,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			}
 		});
 
-		for (int i = 0; i < INITIAL_ROW_COUNT; i++)
-			tableModel.addRow(new Object[numberOfColumns]);
-		getStackData();
-		spDataRowIndex = getTableRowIndex(getSpValue());
-		spDataColumnIndex = getTableColumnIndex(getSpValue());
+		addNewTableRows(INITIAL_ROW_COUNT);
+		updateSpDataRowColIndex();
 		table.repaint(); // Maybe we can remove this
 	}
 
@@ -416,7 +391,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		 * 0x7FFFEFFF, 0x7FFFEFFE, 0x7FFFEFFD, 0x7FFFEFFC or in decimal value:
 		 * 2147479551, 2147479550, 2147479549, 2147479548.
 		 */
-		for (int row = 0, addr = maxSpValue; row < tableModel.getRowCount(); row++) {
+		for (int row = 0, addr = maxSpValue; row < numberOfRows; row++) {
 			tableModel.setValueAt(formatAddress(addr-3), row, ADDRESS_COLUMN);
 			try {
 				if (dataPerByte.isSelected()) {
@@ -528,19 +503,16 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 		if (notice.getRegisterName().equals("$sp")) {
 			int oldSpDataRowIndex = spDataRowIndex;
-			spDataRowIndex = getTableRowIndex(getSpValue());
-			spDataColumnIndex = getTableColumnIndex(getSpValue());
+			updateSpDataRowColIndex();
 			for (int row = spDataRowIndex + 1; row <= oldSpDataRowIndex; row++) {
 				tableModel.setValueAt("", row, storedRegisterColumn);
 				tableModel.setValueAt("", row, frameNameColumn);
 			}
+			resetStoredRegAndFrameNameColumns(spDataRowIndex + 1, oldSpDataRowIndex);
 //			 System.out.println("SP value: " + formatAddress(getSpValue()) + " - tableIndex: " + spDataRowIndex);
 			// Add more rows if we are reaching current row count
-			if (spDataRowIndex + 5 > tableModel.getRowCount()) {
-				for (int i = 0; i < 5; i++) {
-					tableModel.addRow(new Object[numberOfColumns]);
-				}
-				getStackData();
+			if (spDataRowIndex + REMAINING_ROWS_THRESHOLD > numberOfRows) {
+				addNewTableRows(5);
 			}
 			table.repaint(); // Required for coloring $sp position during popping.
 		}
@@ -590,14 +562,18 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			return -1;
 		}
 		int rowIndex = (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
-		if (rowIndex > tableModel.getRowCount()) {
-			// TODO: export a function for adding more table rows
-			for (int i = 0; i < rowIndex - tableModel.getRowCount() + 10; i++)
-				tableModel.addRow(new Object[numberOfColumns]);
-			getStackData();
+		if (rowIndex >= numberOfRows) {
+			addNewTableRows(rowIndex - numberOfRows + 10);
 			table.repaint();
 		}
 		return rowIndex;
+	}
+
+	private void addNewTableRows(int rowNumber) {
+		for (int ri = 0; ri < rowNumber; ri++)
+			tableModel.addRow(new Object[numberOfColumns]);
+		numberOfRows = tableModel.getRowCount();
+		getStackData();
 	}
 
 	private int getTableColumnIndex(int memAddress) {
@@ -652,10 +628,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					frameNameToBeCreated += " (" + count + ")";
 				}
 				if (targetLabel != null) {
-					if (debug)
+					if (debug) {
 						System.out.print("Jumping to: " + targetLabel);
-					if (debug && isJumpAndLinkInstruction(instrName))
-						System.out.println(" (" + (ras.size()) + ")");
+						if (isJumpAndLinkInstruction(instrName))
+							System.out.println(" (" + (ras.size()) + ")");
+						else
+							System.out.println("");
+					}
 				}
 			}
 			else if (isJumpRegInstruction(instrName)) {
@@ -685,6 +664,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					//
 					// It also happens in case StackVisualizer gets disconnected while user program is executing
 					// and then is again connected. TODO fix
+					//
+					// It also happens when tool's Reset button is pressed while user program is executing.
 					e.printStackTrace();
 				}
 			}
@@ -838,14 +819,24 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			System.err.println("ResetAction");
 			System.err.flush();
 		}
-		for (int i = spDataRowIndex+1; i < table.getRowCount(); i++) {
-			tableModel.setValueAt("", i, storedRegisterColumn);
-			tableModel.setValueAt("", i, frameNameColumn);
-		}
+		ras.clear();
+		activeFunctionCallStats.reset();
+		resetStoredRegAndFrameNameColumns(0, numberOfRows-1);
 		getStackData();
+
+		table.repaint();
+	}
+
+	private void updateSpDataRowColIndex() {
 		spDataRowIndex = getTableRowIndex(getSpValue());
 		spDataColumnIndex = getTableColumnIndex(getSpValue());
-		table.repaint();
+	}
+
+	private void resetStoredRegAndFrameNameColumns(int startRow, int endRow) {
+		for (int row = startRow; row < endRow; row++) {
+			tableModel.setValueAt("", row, storedRegisterColumn);
+			tableModel.setValueAt("", row, frameNameColumn);
+		}
 	}
 
 	@Override
@@ -909,6 +900,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				System.err.println("ActiveFunctionCallStats.removeCall: " + subroutineName + " doesn't exist");
 			else
 				activeCalls.replace(subroutineName, oldValue - 1);
+		}
+
+		public void reset() {
+			activeCalls.clear();
 		}
 	}
 
