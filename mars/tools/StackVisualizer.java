@@ -46,12 +46,12 @@ import mars.venus.VenusUI;
 public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	private static String name        = "Stack Visualizer";
-	private static String versionID   = "0.9";
+	private static String versionID   = "1.0-alpha";
 	private static String version     = "Version " + versionID + " (George Z. Zachos, Petros Manousis)";
 	private static String heading     = "Visualizing Stack Modification Operations";
-	private static String releaseDate = "24-Oct-2018";
+	private static String releaseDate = "07-Aug-2019";
 
-	// We need this definition here to initialize numberOfColumns
+	// We need the following definition here to initialize numberOfColumns
 	private final String[] colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg", "Call Layout"};
 	private final String[] colNamesWhenNotDataPerByte = {"Address", "Word-length Data", "Stored Reg", "Call Layout"};
 
@@ -74,7 +74,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private final int     I_RS_OPERAND_LIST_INDEX   = 0; // I-format RS (source register) index
 	private final int     J_ADDR_OPERAND_LIST_INDEX = 0; // J-format Address index
 	private final int     R_RS_OPERAND_LIST_INDEX   = 0; // R-format RS (source register) index
-	private final int     INITIAL_MAX_SP_VALUE      = SP_INIT_ADDR + (WORD_LENGTH_BYTES - 1);
+	private final int     INITIAL_MAX_SP_VALUE      = SP_INIT_ADDR + (WORD_LENGTH_BYTES - 1); // Max byte address
 	private int           maxSpValue                = INITIAL_MAX_SP_VALUE;
 	private int           maxSpValueWordAligned     = SP_INIT_ADDR;
 	private String        regNameToBeStoredInStack  = null;
@@ -271,9 +271,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 		table.setVisible(false);   // Used to avoid rendering delays
 		tableModel.setColumnCount(0);	// Clear table columns
-		for (String s : columnNames) {
+		for (String s : columnNames)
 			tableModel.addColumn(s);	// Add new table columns
-		}
 
 		// Update table-related data
 		numberOfColumns = tableModel.getColumnCount();
@@ -504,10 +503,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		if (notice.getRegisterName().equals("$sp")) {
 			int oldSpDataRowIndex = spDataRowIndex;
 			updateSpDataRowColIndex();
-			for (int row = spDataRowIndex + 1; row <= oldSpDataRowIndex; row++) {
-				tableModel.setValueAt("", row, storedRegisterColumn);
-				tableModel.setValueAt("", row, frameNameColumn);
-			}
 			resetStoredRegAndFrameNameColumns(spDataRowIndex + 1, oldSpDataRowIndex);
 //			 System.out.println("SP value: " + formatAddress(getSpValue()) + " - tableIndex: " + spDataRowIndex);
 			// Add more rows if we are reaching current row count
@@ -833,7 +828,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	private void resetStoredRegAndFrameNameColumns(int startRow, int endRow) {
-		for (int row = startRow; row < endRow; row++) {
+		for (int row = startRow; row <= endRow; row++) {
 			tableModel.setValueAt("", row, storedRegisterColumn);
 			tableModel.setValueAt("", row, frameNameColumn);
 		}
