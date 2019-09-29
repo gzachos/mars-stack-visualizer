@@ -818,7 +818,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		activeFunctionCallStats.reset();
 		resetStoredRegAndFrameNameColumns(0, numberOfRows-1);
 		getStackData();
-
+		updateSpDataRowColIndex();
 		table.repaint();
 	}
 
