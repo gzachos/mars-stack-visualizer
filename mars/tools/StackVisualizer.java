@@ -46,10 +46,10 @@ import mars.venus.VenusUI;
 public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	private static String name        = "Stack Visualizer";
-	private static String versionID   = "1.0-alpha";
+	private static String versionID   = "1.0";
 	private static String version     = "Version " + versionID + " (George Z. Zachos, Petros Manousis)";
 	private static String heading     = "Visualizing Stack Modification Operations";
-	private static String releaseDate = "07-Aug-2019";
+	private static String releaseDate = "30-Sep-2019";
 
 	// We need the following definition here to initialize numberOfColumns
 	private final String[] colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg", "Call Layout"};
@@ -161,8 +161,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				else if (row > spDataRowIndex) {
 					color = GRAY;
 				}
-				else {
-					if (row % 2 == 0)
+				else if (row % 2 == 0) {
 						color = LIGHT_GRAY;
 				}
 				c.setBackground(new Color(color));
@@ -514,7 +513,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	private void processStackMemoryUpdate(MemoryAccessNotice notice) {
-		String regName, frameName;
+		String regName = "", frameName = "";
 
 		if (notice.getAccessType() == AccessNotice.READ)
 			return;
@@ -522,15 +521,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		if (regNameToBeStoredInStack != null) {
 			regName = regNameToBeStoredInStack;
 			regNameToBeStoredInStack = null;
-		} else {
-			regName = "";
 		}
 
 		if (frameNameToBeCreated != null) {
 			frameName = frameNameToBeCreated;
 			frameNameToBeCreated = null;
-		} else {
-			frameName = "";
 		}
 
 		if (debug) {
@@ -661,7 +656,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					// and then is again connected. TODO fix
 					//
 					// It also happens when tool's Reset button is pressed while user program is executing.
-					e.printStackTrace();
+
+					// e.printStackTrace();
 				}
 			}
 		} catch (AddressErrorException e) {
@@ -818,13 +814,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		activeFunctionCallStats.reset();
 		resetStoredRegAndFrameNameColumns(0, numberOfRows-1);
 		getStackData();
-
+		updateSpDataRowColIndex();
 		table.repaint();
 	}
 
 	private void updateSpDataRowColIndex() {
-		spDataRowIndex = getTableRowIndex(getSpValue());
-		spDataColumnIndex = getTableColumnIndex(getSpValue());
+		int spValue = getSpValue();
+		spDataRowIndex = getTableRowIndex(spValue);
+		spDataColumnIndex = getTableColumnIndex(spValue);
 	}
 
 	private void resetStoredRegAndFrameNameColumns(int startRow, int endRow) {
@@ -849,7 +846,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				+ "while the whole word-length data in a yellow one. Lower addresses have a grey\n"
 				+ "background (given that stack growth takes place form higher to lower addresses).\n"
 				+ "The names of the registers whose contents are stored (sw, sh, sb etc.) in the\n"
-				+ "stack, are shown in the Stored Reg column.\n\n"
+				+ "stack, are shown in the \"Stored Reg\" column. In the \"Call Layout\" column, the subroutine\n"
+				+ "frame (activation record) layout is displayed, with subroutine names placed on the highest\n"
+				+ "address of the corresponding frames.\n\n"
 				+ "Note\n"
 				+ "This program is suposed to be used as a MARS Tool and NOT as a stand-alone application."
 				+ "\n\n"
