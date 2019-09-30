@@ -46,10 +46,10 @@ import mars.venus.VenusUI;
 public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	private static String name        = "Stack Visualizer";
-	private static String versionID   = "1.0-alpha";
+	private static String versionID   = "1.0";
 	private static String version     = "Version " + versionID + " (George Z. Zachos, Petros Manousis)";
 	private static String heading     = "Visualizing Stack Modification Operations";
-	private static String releaseDate = "07-Aug-2019";
+	private static String releaseDate = "30-Sep-2019";
 
 	// We need the following definition here to initialize numberOfColumns
 	private final String[] colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg", "Call Layout"};
