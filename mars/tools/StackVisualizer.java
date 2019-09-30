@@ -656,7 +656,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					// and then is again connected. TODO fix
 					//
 					// It also happens when tool's Reset button is pressed while user program is executing.
-					e.printStackTrace();
+
+					// e.printStackTrace();
 				}
 			}
 		} catch (AddressErrorException e) {
