@@ -161,8 +161,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				else if (row > spDataRowIndex) {
 					color = GRAY;
 				}
-				else {
-					if (row % 2 == 0)
+				else if (row % 2 == 0) {
 						color = LIGHT_GRAY;
 				}
 				c.setBackground(new Color(color));
@@ -514,7 +513,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	private void processStackMemoryUpdate(MemoryAccessNotice notice) {
-		String regName, frameName;
+		String regName = "", frameName = "";
 
 		if (notice.getAccessType() == AccessNotice.READ)
 			return;
@@ -522,15 +521,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		if (regNameToBeStoredInStack != null) {
 			regName = regNameToBeStoredInStack;
 			regNameToBeStoredInStack = null;
-		} else {
-			regName = "";
 		}
 
 		if (frameNameToBeCreated != null) {
 			frameName = frameNameToBeCreated;
 			frameNameToBeCreated = null;
-		} else {
-			frameName = "";
 		}
 
 		if (debug) {
@@ -823,8 +818,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 	private void updateSpDataRowColIndex() {
-		spDataRowIndex = getTableRowIndex(getSpValue());
-		spDataColumnIndex = getTableColumnIndex(getSpValue());
+		int spValue = getSpValue();
+		spDataRowIndex = getTableRowIndex(spValue);
+		spDataColumnIndex = getTableColumnIndex(spValue);
 	}
 
 	private void resetStoredRegAndFrameNameColumns(int startRow, int endRow) {
