@@ -9,11 +9,11 @@ educational-level use with Patterson and Hennessy's Computer Organization and De
 __TODO__: Complete project description
 
 ## Project Supervisor
- - [Aris Efthymiou](http://cse.uoi.gr/~efthym)
+ - [Aris Efthymiou](https://www.cse.uoi.gr/~efthym)
 
 ## Project Developers
- - [George Z. Zachos](http://cse.uoi.gr/~gzachos)
- - [Petros Manousis](http://cse.uoi.gr/~pmanousi)
+ - [George Z. Zachos](https://www.cse.uoi.gr/~gzachos)
+ - [Petros Manousis](https://www.cs.uoi.gr/~pmanousi)
 
 ## License
 For the current license statement please refer to [LICENSE](./LICENSE).
