@@ -55,6 +55,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private final String[] colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg", "Call Layout"};
 	private final String[] colNamesWhenNotDataPerByte = {"Address", "Word-length Data", "Stored Reg", "Call Layout"};
 
+	private static boolean inStandAloneMode = false;  // By default run as a MARS Tool instead of Stand-alone Application
+
 	/*
 	 * Memory.stackBaseAddress:  word-aligned
 	 * Memory.stackLimitAddress: word-aligned
@@ -124,6 +126,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	public StackVisualizer() {
 		super(StackVisualizer.name + ", " + StackVisualizer.version, StackVisualizer.heading);
+	}
+
+	/*
+	 * Main method provided for use as a MARS application (stand-alone program).
+	 */
+	public static void main(String[] args) {
+		inStandAloneMode = true;
+		new StackVisualizer(StackVisualizer.name + " stand-alone, " + StackVisualizer.version, StackVisualizer.heading).go();
 	}
 
 	@Override
@@ -292,6 +302,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	@Override
 	protected void initializePreGUI() {
+
+		if (inStandAloneMode == true)
+			return;
+
 		// TODO: disable reset button too?
 
 		// TODO: disable actions performed when Tool not connected!
@@ -331,34 +345,38 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	@Override
 	protected void initializePostGUI() {
+		if (inStandAloneMode == true) {
+			getStackData();
+			updateSpDataRowColIndex();
+		} else {
+			connectButton.addActionListener(new ActionListener() {
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					if (connectButton.isConnected()) {
+						restoreBackStepper(); // TODO We really need this?
+					} else {
+						/*
+						 * User program should be recompiled (and executed) after
+						 * StackVisualizer is launched. This is required for
+						 * coherently storing the subroutine call stack.
+						 */
+						runButtonsSetEnabled(false);
+						// Connecting StackVisualizer in the middle of program execution
+						// will disable Back Stepper but the button is enabled.
+						// Maybe we should disable it by hand or just don't mess with it.
+	//					marsGui.getRunBackstepAction().isEnabled(); // TODO disable?
+						disableBackStepper();
+						getStackData();
+						updateSpDataRowColIndex();
+						table.repaint();
 
-		connectButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				if (connectButton.isConnected()) {
-					restoreBackStepper(); // TODO We really need this?
-				} else {
-					/*
-					 * User program should be recompiled (and executed) after
-					 * StackVisualizer is launched. This is required for
-					 * coherently storing the subroutine call stack.
-					 */
-					runButtonsSetEnabled(false);
-					// Connecting StackVisualizer in the middle of program execution
-					// will disable Back Stepper but the button is enabled.
-					// Maybe we should disable it by hand or just don't mess with it.
-//					marsGui.getRunBackstepAction().isEnabled(); // TODO disable?
-					disableBackStepper();
-					getStackData();
-					updateSpDataRowColIndex();
-					table.repaint();
-
-					String msg = "Back Stepping has been disabled.\n"
-							+ "Already running programs should be assembled again.";
-					showMessageWindow(msg);
+						String msg = "Back Stepping has been disabled.\n"
+								+ "Already running programs should be assembled again.";
+						showMessageWindow(msg);
+					}
 				}
-			}
-		});
+			});
+		}
 
 		addNewTableRows(INITIAL_ROW_COUNT);
 		updateSpDataRowColIndex();
@@ -849,9 +867,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				+ "stack, are shown in the \"Stored Reg\" column. In the \"Call Layout\" column, the subroutine\n"
 				+ "frame (activation record) layout is displayed, with subroutine names placed on the highest\n"
 				+ "address of the corresponding frames.\n\n"
-				+ "Note\n"
-				+ "This program is suposed to be used as a MARS Tool and NOT as a stand-alone application."
-				+ "\n\n"
 				+ "Contact\n"
 				+ "For questions or comments contact: George Z. Zachos (gzachos@cse.uoi.gr) or\n"
 				+ "Aristides Efthymiou (efthym@cse.uoi.gr)";
