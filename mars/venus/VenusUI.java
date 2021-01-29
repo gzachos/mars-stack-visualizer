@@ -1131,22 +1131,6 @@ public class VenusUI extends JFrame {
 		return runAssembleAction;
 	}
 
-	public Action getRunGoAction() {
-		return runGoAction;
-	}
-
-	public Action getRunStepAction() {
-		return runStepAction;
-	}
-
-	public Action getResetAction() {
-		return runResetAction;
-	}
-
-	public Action getRunBackstepAction() {
-		return runBackstepAction;
-	}
-
 	public JButton getRunButton() {
 		return Run;
 	}
@@ -1157,22 +1141,6 @@ public class VenusUI extends JFrame {
 
 	public JButton getStepButton() {
 		return Step;
-	}
-
-	public JMenuItem getRunAssembleItem() {
-		return runAssemble;
-	}
-
-	public JMenuItem getRunGoItem() {
-		return runGo;
-	}
-
-	public JMenuItem getRunStepItem() {
-		return runStep;
-	}
-
-	public JMenuItem getRunBackstepItem() {
-		return runBackstep;
 	}
 
 	/**

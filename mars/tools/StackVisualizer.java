@@ -63,7 +63,10 @@ import mars.mips.hardware.RegisterAccessNotice;
 import mars.mips.hardware.RegisterFile;
 import mars.mips.instructions.Instruction;
 import mars.simulator.BackStepper;
+import mars.simulator.Simulator;
+import mars.simulator.SimulatorNotice;
 import mars.util.Binary;
+import mars.venus.FileStatus;
 import mars.venus.VenusUI;
 
 @SuppressWarnings({ "serial", "deprecation" })
@@ -79,7 +82,6 @@ import mars.venus.VenusUI;
  * @author Petros Manousis <pmanousi@cs.uoi.gr>
  */
 public class StackVisualizer extends AbstractMarsToolAndApplication {
-
 	private static String name        = "Stack Visualizer";
 	private static String versionID   = "1.0";
 	private static String version     = "Version " + versionID + " (George Z. Zachos, Petros Manousis)";
@@ -92,8 +94,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	/** Table column names for displaying data per word. */
 	private final String[] colNamesWhenNotDataPerByte = {"Address", "Word-length Data", "Stored Reg", "Call Layout"};
 
-	/** True if StackVisualizer is currently running as a stand-alone program (MARS application */
-	private static boolean inStandAloneMode = false;  // By default run as a MARS Tool instead of Stand-alone Application
+	/**
+	 * True if {@link StackVisualizer} is currently running
+	 * as a stand-alone program (MARS application)
+	 */
+	private static boolean inStandAloneMode = false;
 
 	/*
 	 * Memory.stackBaseAddress:  word-aligned
@@ -143,7 +148,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private final ActiveSubroutineStats activeFunctionCallStats = new ActiveSubroutineStats();
 
 	// GUI-Related fields
-	private final VenusUI marsGui                   = Globals.getGui();
 	private final int     windowWidth               = 600;
 	private final int     windowHeight              = 600;
 	/** Table column index where memory address should be stored. Should always be first column. */
@@ -319,7 +323,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			color = GRAY;
 		}
 		else if (row % 2 == 0) {
-				color = LIGHT_GRAY;
+			color = LIGHT_GRAY;
 		}
 		return new Color(color);
 	}
@@ -400,40 +404,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		if (inStandAloneMode == true)
 			return;
 
-		// TODO: disable reset button too?
-		// TODO: disable actions performed when Tool not connected!
-		marsGui.getRunAssembleItem().addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				if (!isObserving()) // TODO verify
-					return;
-
-				if (debugBackStepper) {
-					System.out.flush();
-					System.err.println("RunAssemble");
-					System.err.flush();
-				}
-				runButtonsSetEnabled(true);
-				reset();
-			}
-		});
-
-		marsGui.getAssembleButton().addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				if (!isObserving()) // TODO verify
-					return;
-
-				if (debugBackStepper) {
-					System.out.flush();
-					System.err.println("Assemble");
-					System.err.flush();
-				}
-				runButtonsSetEnabled(true);
-				reset();
-			}
-		});
-
+		Simulator sim = Simulator.getInstance();
+		sim.addObserver(this);
 	}
 
 
@@ -455,11 +427,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 						 * coherently storing the subroutine call stack.
 						 */
 						runButtonsSetEnabled(false);
-						// Connecting StackVisualizer in the middle of program execution
-						// will disable Back Stepper but the button is enabled.
-						// Maybe we should disable it by hand or just don't mess with it.
-	//					marsGui.getRunBackstepAction().isEnabled(); // TODO disable?
+						/* Connecting StackVisualizer in the middle of program execution
+						 * will disable Back Stepper but the button will show as enabled.
+						 * Maybe we should disable it by hand or just don't mess with it.
+						 */
 						disableBackStepper();
+
 						getStackData();
 						updateSpDataRowColIndex();
 						table.repaint();
@@ -476,12 +449,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		table.repaint(); // Maybe we can remove this
 	}
 
+
 	/**
 	 * Fills table with data directly from Mars' memory instance.
 	 *
-	 * This method fires a {@code MemoryAccessNotice} every time it reads from memory.
+	 * This method fires a {@link MemoryAccessNotice} every time it reads from memory.
 	 * For this reason it should not be called in a code block handling a
-	 * {@code MemoryAccessNotice} of {@code AccessNotice.READ} type as it will lead
+	 * {@link MemoryAccessNotice} of {@code AccessNotice.READ} type as it will lead
 	 * in infinite recursive calls of itself.
 	 */
 	protected void getStackData() {
@@ -585,12 +559,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	@Override
 	protected void processMIPSUpdate(Observable resource, AccessNotice notice) {
-//		System.out.println(notice.accessIsFromMIPS() +" " + notice.accessIsFromGUI() + " " + notice);
+		// System.out.println(notice.accessIsFromMIPS() +" " + notice.accessIsFromGUI() + " " + notice);
 
 		if (!notice.accessIsFromMIPS())
 			return;
-
-		disableBackStepper();
 
 		if (notice instanceof MemoryAccessNotice) {
 			MemoryAccessNotice m = (MemoryAccessNotice) notice;
@@ -917,9 +889,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 
-	private void runButtonsSetEnabled(boolean state) {
-		marsGui.getRunGoAction().setEnabled(state);
-		marsGui.getRunStepAction().setEnabled(state);
+	private void runButtonsSetEnabled(boolean enable) {
+		if (enable == true)
+			FileStatus.set(FileStatus.RUNNABLE);
+		else
+			FileStatus.set(FileStatus.TERMINATED);
 	}
 
 
@@ -1006,9 +980,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			System.err.println("ResetAction");
 			System.err.flush();
 		}
-		ras.clear();
-		activeFunctionCallStats.reset();
-		resetStoredRegAndFrameNameColumns(0, numberOfRows-1);
 		getStackData();
 		updateSpDataRowColIndex();
 		table.repaint();
@@ -1037,6 +1008,62 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private int calcTableColIndex(int offsetFromEnd) {
 		return numberOfColumns - offsetFromEnd - 1;
 	}
+
+
+	/**
+	 * A {@link SimulatorNotice} is handled locally in {@link StackVisualizer}, while all
+	 * other notices are handled by supertype {@link AbstractMarsToolAndApplication}.
+	 */
+	@Override
+	public void update(Observable observable, Object accessNotice) {
+		if (observable == mars.simulator.Simulator.getInstance()) {
+			SimulatorNotice notice = (SimulatorNotice) accessNotice;
+			if (notice.getAction() == SimulatorNotice.SIMULATOR_START)
+				onSimulationStart();
+//			else if (notice.getAction() == SimulatorNotice.SIMULATOR_STOP)
+//				onSimulationEnd();
+		} else {
+			super.update(observable, accessNotice);
+		}
+	}
+
+
+	/**
+	 * Callback method after a simulation starts.
+	 * A simulation starts each time a Run button is pressed (stepped or not).
+	 */
+	private void onSimulationStart() {
+		if (!isObserving())
+			return;
+//		System.err.println("SIMULATION - END: " + inSteppedExecution());
+		if (VenusUI.getReset()) { // TODO verify
+			ras.clear();
+			activeFunctionCallStats.reset();
+			resetStoredRegAndFrameNameColumns(0, numberOfRows-1);
+		}
+		disableBackStepper();
+	}
+
+
+	/**
+	 * Callback method after a simulation ends.
+	 * A simulation starts/ends each time a Run button is pressed (stepped or not).
+	 */
+//	private void onSimulationEnd() {
+//		if (!isObserving())
+//			return;
+//		System.err.println("SIMULATION - END: " + inSteppedExecution());
+//	}
+
+
+	/**
+	 * @return true if we are in stepped execution.
+	 */
+//	private boolean inSteppedExecution() {
+//		if (Globals.program == null)
+//			return false;
+//		return Globals.program.inSteppedExecution();
+//	}
 
 
 	@Override
