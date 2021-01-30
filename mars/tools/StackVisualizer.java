@@ -69,7 +69,6 @@ import mars.util.Binary;
 import mars.venus.FileStatus;
 import mars.venus.VenusUI;
 
-@SuppressWarnings({ "serial", "deprecation" })
 /**
  * Allows the user to view in real time the $sp-relative memory modification operations taking place in the stack segment.
  * The user can also observe how the stack grows. The address pointed by the stack pointer is displayed in an orange background
@@ -77,10 +76,13 @@ import mars.venus.VenusUI;
  * place form higher to lower addresses). The names of the registers whose contents are stored (sw, sh, sb etc.) in the stack,
  * are shown in the "Stored Reg" column. In the "Call Layout" column, the subroutine frame (activation record) layout is displayed,
  * with subroutine names placed on the highest address of the corresponding frames.
+ * 
+ * GitHub repository: <a href="https://github.com/gzachos/mars-stack-visualizer">https://github.com/gzachos/mars-stack-visualizer</a>
  *
  * @author George Z. Zachos <gzachos@cse.uoi.gr>
  * @author Petros Manousis <pmanousi@cs.uoi.gr>
  */
+@SuppressWarnings({ "serial", "deprecation" })
 public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static String name        = "Stack Visualizer";
 	private static String versionID   = "1.0";
@@ -1133,6 +1135,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				+ "stack, are shown in the \"Stored Reg\" column. In the \"Call Layout\" column, the subroutine\n"
 				+ "frame (activation record) layout is displayed, with subroutine names placed on the highest\n"
 				+ "address of the corresponding frames.\n\n"
+				+ "GitHub repository: https://github.com/gzachos/mars-stack-visualizer\n\n"
 				+ "Contact\n"
 				+ "For questions or comments contact: George Z. Zachos (gzachos@cse.uoi.gr) or\n"
 				+ "Aristides Efthymiou (efthym@cse.uoi.gr)";
