@@ -772,14 +772,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 						System.out.println("Mismatching return address: " + rasTopAddress + " - " + jalStatementAddress);
 					}
 				} catch (IndexOutOfBoundsException e) {
-					// Exception is thrown whenever function calling instructions are back-stepped (undone)
-					// and again executed. Undoing the last step is not supported!
-					//
-					// It also happens in case StackVisualizer gets disconnected while user program is executing
-					// and then is again connected. TODO fix
-					//
-					// It also happens when tool's Reset button is pressed while user program is executing.
-
+					/* Exception is thrown whenever subroutine calling instructions are back-stepped (undone)
+					 * and again executed. Undoing the last step should not be supported!
+					 *
+					 * It also happens in case StackVisualizer gets disconnected while user program is executing
+					 * and then is again connected. Fixed: Tool's disconnect button is disabled during execution/simulation
+					 * and then again enabled at the end.
+					 *
+					 * It also happens when tool's Reset button is pressed while user program is executing.
+					 */
 					// e.printStackTrace();
 				}
 			}
@@ -1042,8 +1043,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			SimulatorNotice notice = (SimulatorNotice) accessNotice;
 			if (notice.getAction() == SimulatorNotice.SIMULATOR_START)
 				onSimulationStart();
-//			else if (notice.getAction() == SimulatorNotice.SIMULATOR_STOP)
-//				onSimulationEnd();
+			else if (notice.getAction() == SimulatorNotice.SIMULATOR_STOP)
+				onSimulationEnd();
 		} else {
 			super.update(observable, accessNotice);
 		}
@@ -1064,6 +1065,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			resetStoredRegAndFrameNameColumns(0, numberOfRows-1);
 		}
 		disableBackStepper();
+		connectButton.setEnabled(false);
 	}
 
 
@@ -1071,11 +1073,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 * Callback method after a simulation ends.
 	 * A simulation starts/ends each time a Run button is pressed (stepped or not).
 	 */
-//	private void onSimulationEnd() {
-//		if (!isObserving())
-//			return;
+	private void onSimulationEnd() {
+		if (!isObserving())
+			return;
 //		System.err.println("SIMULATION - END: " + inSteppedExecution());
-//	}
+		connectButton.setEnabled(true);
+	}
 
 
 	/**
