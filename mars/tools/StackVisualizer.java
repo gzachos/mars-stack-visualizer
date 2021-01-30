@@ -111,6 +111,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 */
 	/** Register number of stack pointer (29) */
 	private final int     SP_REG_NUMBER             = RegisterFile.STACK_POINTER_REGISTER;
+	/** Register number of return address (31) */
+	private final int     RA_REG_NUMBER             = RegisterFile.getNumber("$ra");
 	/** Stack pointer's initial address/value */
 	private final int     SP_INIT_ADDR              = Memory.stackPointer;
 	private final Memory  memInstance               = Memory.getInstance();
@@ -136,6 +138,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private String        regNameToBeStoredInStack  = null;
 	/** Name of the (subroutine) frame to be allocated in stack segment. */
 	private String        frameNameToBeCreated      = null;
+	/** Whether $ra was written/updated in the last instruction. */
+	private boolean       raWrittenInPrevInstr      = false;
 	/**
 	 * Return Address Stack. Target addresses of jal instructions are pushed and
 	 * then are popped and matched when jr instructions are encountered.
@@ -419,7 +423,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				@Override
 				public void actionPerformed(ActionEvent e) {
 					if (connectButton.isConnected()) {
-						restoreBackStepper(); // TODO We really need this?
+						restoreBackStepper();
 					} else {
 						/*
 						 * User program should be recompiled (and executed) after
@@ -547,6 +551,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		 */
 		addAsObserver(RegisterFile.getRegisters()[SP_REG_NUMBER]);
 		addAsObserver(Memory.textBaseAddress, Memory.textLimitAddress);
+		addAsObserver(RegisterFile.getRegisters()[RA_REG_NUMBER]);
 	}
 
 
@@ -579,7 +584,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 
 	private void processRegisterAccessNotice(RegisterAccessNotice notice) {
-		// Currently only $sp is observed
+		// Currently only $sp is observed ($ra also but not for stack modification ops)
 		// TODO: What about observing frame pointer?
 		if (notice.getAccessType() == AccessNotice.READ)
 			return;
@@ -597,6 +602,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				addNewTableRows(5);
 			}
 			table.repaint(); // Required for coloring $sp position during popping.
+		} else if (notice.getRegisterName().equals("$ra")) {
+			raWrittenInPrevInstr = true;
 		}
 	}
 
@@ -722,14 +729,16 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 //				System.out.println();
 				regNameToBeStoredInStack = RegisterFile.getRegisters()[operands[I_RS_OPERAND_LIST_INDEX]].getName();
 			}
-			else if (isJumpInstruction(instrName) || isJumpAndLinkInstruction(instrName)) { // TODO handle jal equivalent?
+			else if (isJumpInstruction(instrName) || isJumpAndLinkInstruction(instrName)) {
 				int targetAdrress = stmnt.getOperand(J_ADDR_OPERAND_LIST_INDEX) * WORD_LENGTH_BYTES;
 				String targetLabel = addrToTextSymbol(targetAdrress);
 				if (isJumpAndLinkInstruction(instrName)) {
-					ras.add(stmnt.getAddress());
-					frameNameToBeCreated = targetLabel;
-					Integer count = activeFunctionCallStats.addCall(targetLabel);
-					frameNameToBeCreated += " (" + count + ")";
+					registerNewSubroutineCall(stmnt, targetLabel);
+				} else if (isJumpInstruction(instrName)) {
+					if (raWrittenInPrevInstr == true) {
+						raWrittenInPrevInstr = false;
+						registerNewSubroutineCall(stmnt, targetLabel);
+					}
 				}
 				if (targetLabel != null) {
 					if (debug) {
@@ -780,6 +789,19 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+	}
+
+
+	/**
+	 * Update {@code ras}, {@code activeFunctionCallStats} and {@code frameNameToBeCreated}
+	 * as of a new subroutine call.
+	 * @param stmnt the jump/jal instruction statement that invokes the new subroutine call.
+	 * @param targetLabel the name/label of the new subroutine that is called.
+	 */
+	private void registerNewSubroutineCall(ProgramStatement stmnt, String targetLabel) {
+		ras.add(stmnt.getAddress());
+		Integer count = activeFunctionCallStats.addCall(targetLabel);
+		frameNameToBeCreated = targetLabel + " (" + count + ")";
 	}
 
 
@@ -1036,7 +1058,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		if (!isObserving())
 			return;
 //		System.err.println("SIMULATION - END: " + inSteppedExecution());
-		if (VenusUI.getReset()) { // TODO verify
+		if (VenusUI.getReset()) {
 			ras.clear();
 			activeFunctionCallStats.reset();
 			resetStoredRegAndFrameNameColumns(0, numberOfRows-1);
