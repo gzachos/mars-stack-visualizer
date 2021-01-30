@@ -530,7 +530,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					System.out.println(" [" + tableModel.getValueAt(row, frameNameColumn) + "]");
 				}
 			} catch (AddressErrorException aee) {
-				aee.printStackTrace(); // TODO handle?
+				System.err.println("getStackData(): " + formatAddress(aee.getAddress()) + " AddressErrorException");
 			}
 		}
 
@@ -705,6 +705,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		}
 //		printBin(notice.getValue());
 
+		boolean localRaWrittenInPrevInstr = raWrittenInPrevInstr;
+		raWrittenInPrevInstr = false;
+
 		try {
 			ProgramStatement stmnt =  memInstance.getStatementNoNotify(notice.getAddress());
 
@@ -735,8 +738,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				if (isJumpAndLinkInstruction(instrName)) {
 					registerNewSubroutineCall(stmnt, targetLabel);
 				} else if (isJumpInstruction(instrName)) {
-					if (raWrittenInPrevInstr == true) {
-						raWrittenInPrevInstr = false;
+					if (localRaWrittenInPrevInstr == true) {
 						registerNewSubroutineCall(stmnt, targetLabel);
 					}
 				}
@@ -752,7 +754,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			}
 			else if (isJumpRegInstruction(instrName)) {
 				int targetRegister = stmnt.getOperand(R_RS_OPERAND_LIST_INDEX);
-				// TODO: check $ra only (?)
 				Register reg = RegisterFile.getRegisters()[targetRegister];
 				int returnAddress = reg.getValue();
 				// returnAddress-4 is needed as PC+4 is stored in $ra when jal is executed.
@@ -769,24 +770,26 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				try {
 					Integer rasTopAddress = ras.remove(ras.size()-1);
 					if (rasTopAddress.compareTo(jalStatementAddress) != 0) {
-						System.out.println("Mismatching return address: " + rasTopAddress + " - " + jalStatementAddress);
+						System.err.println("Mismatching return address: " + rasTopAddress + " - " + jalStatementAddress +
+								" (ras vs jal)");
 					}
-				} catch (IndexOutOfBoundsException e) {
-					/* Exception is thrown whenever subroutine calling instructions are back-stepped (undone)
-					 * and again executed. Undoing the last step should not be supported!
+				} catch (IndexOutOfBoundsException iobe) {
+					/* Exception is thrown whenever:
+					 * 1) Subroutine calling instructions are back-stepped (undone) and again executed.
+					 * Undoing the last step should not be supported! FIXED: BackStepper is disabled.
 					 *
-					 * It also happens in case StackVisualizer gets disconnected while user program is executing
-					 * and then is again connected. Fixed: Tool's disconnect button is disabled during execution/simulation
-					 * and then again enabled at the end.
+					 * 2) In case StackVisualizer gets disconnected while user program is executing and
+					 * then is again connected. FIXED: Tool's disconnect button is disabled during
+					 * execution/simulation and then again enabled at the end.
 					 *
-					 * It also happens when tool's Reset button is pressed while user program is executing.
+					 * 3) When tool's Reset button is pressed while the user program is executing.
+					 * FIXED: Removed ras and activeFunctionCallStats reset operations from reset()
 					 */
-					// e.printStackTrace();
+					System.err.println("Mismatching number of subroutine calls and returns.");
 				}
 			}
-		} catch (AddressErrorException e) {
-			// Suppress such warnings
-//			e.printStackTrace();
+		} catch (AddressErrorException aee) {
+			System.err.println("processTextMemoryUpdate(): " + formatAddress(aee.getAddress()) + " AddressErrorException");
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -803,6 +806,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		ras.add(stmnt.getAddress());
 		Integer count = activeFunctionCallStats.addCall(targetLabel);
 		frameNameToBeCreated = targetLabel + " (" + count + ")";
+//		System.out.println("Subroutine call from: " + stmnt.getAddress() + " to " + frameNameToBeCreated);
+//		System.out.print("{");
+//		for (int addr : ras) {
+//			System.out.print(formatAddress(addr) + ", ");
+//		}
+//		System.out.println("}");
 	}
 
 
@@ -888,7 +897,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			return;
 		if (bs.enabled()) {
 			if (debugBackStepper)
-				System.err.println("Disabled BackStepper");
+				System.out.println("Disabled BackStepper");
 			bs.setEnabled(false);
 			disabledBackStep = true;
 		}
@@ -905,7 +914,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				return;
 			if (!bs.enabled()) {
 				if (debugBackStepper)
-					System.err.println("Enabled BackStepper");
+					System.out.println("Enabled BackStepper");
 				bs.setEnabled(true);
 			}
 		}
@@ -998,10 +1007,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	@Override
 	protected void reset() {
-		if (debugBackStepper) {
-			System.out.flush();
-			System.err.println("ResetAction");
-			System.err.flush();
+		/*
+		 * Do not reset/clear here ras or activeFunctionCallStats.
+		 */
+		if (debug) {
+			System.out.println("ToolReset");
 		}
 		getStackData();
 		updateSpDataRowColIndex();
@@ -1040,14 +1050,25 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	@Override
 	public void update(Observable observable, Object accessNotice) {
 		if (observable == mars.simulator.Simulator.getInstance()) {
-			SimulatorNotice notice = (SimulatorNotice) accessNotice;
-			if (notice.getAction() == SimulatorNotice.SIMULATOR_START)
-				onSimulationStart();
-			else if (notice.getAction() == SimulatorNotice.SIMULATOR_STOP)
-				onSimulationEnd();
+			processSimulatorUpdate((SimulatorNotice) accessNotice);
 		} else {
 			super.update(observable, accessNotice);
 		}
+	}
+
+
+	/**
+	 * Process a {@link SimulatorNotice} and handle {@code SIMULATOR_START} or
+	 * {@code SIMULATOR_STOP} accordingly.
+	 */
+	private void processSimulatorUpdate(SimulatorNotice notice) {
+		int action = notice.getAction();
+		if (debug)
+			System.out.println("\nSimulatorNotice: " + ((action == SimulatorNotice.SIMULATOR_START) ? "Start" : "End"));
+		if (action == SimulatorNotice.SIMULATOR_START)
+			onSimulationStart();
+		else if (action == SimulatorNotice.SIMULATOR_STOP)
+			onSimulationEnd();
 	}
 
 
@@ -1058,11 +1079,20 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private void onSimulationStart() {
 		if (!isObserving())
 			return;
-//		System.err.println("SIMULATION - END: " + inSteppedExecution());
-		if (VenusUI.getReset()) {
+//		System.err.println("SIMULATION - START: " + inSteppedExecution());
+		if (VenusUI.getReset()) { // GUI Reset button clicks are also handled here.
+			if (debug)
+				System.out.println("GUI registers/memory reset detected");
+			/*
+			 * On registers/memory reset, clear data related to subroutine calls,
+			 * and reset/update table data.
+			 */
 			ras.clear();
 			activeFunctionCallStats.reset();
 			resetStoredRegAndFrameNameColumns(0, numberOfRows-1);
+			getStackData();
+			updateSpDataRowColIndex();
+			table.repaint();
 		}
 		disableBackStepper();
 		connectButton.setEnabled(false);
