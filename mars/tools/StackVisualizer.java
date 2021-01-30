@@ -463,7 +463,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 * {@link MemoryAccessNotice} of {@code AccessNotice.READ} type as it will lead
 	 * in infinite recursive calls of itself.
 	 */
-	protected void getStackData() {
+	private void getStackData() {
 		int col;
 
 		if (printMemContents)
