@@ -196,9 +196,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private boolean       disabledBackStep = false;
 	private final DefaultTableModel tableModel = new DefaultTableModel();
 
-	// Debug-related data
+	/** Used for debugging purposes. */
 	private final boolean debug = false, printMemContents = false, debugBackStepper = false;
-	private final boolean displayDataPerByte = false;
 
 
 	protected StackVisualizer(String title, String heading) {
@@ -480,43 +479,39 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		 * 0x7FFFEFFF, 0x7FFFEFFE, 0x7FFFEFFD, 0x7FFFEFFC or in decimal value:
 		 * 2147479551, 2147479550, 2147479549, 2147479548.
 		 */
-		for (int row = 0, addr = maxSpValue; row < numberOfRows; row++) {
-			tableModel.setValueAt(formatAddress(addr-3), row, ADDRESS_COLUMN);
+		for (int row = 0, addr = maxSpValueWordAligned; row < numberOfRows; row++, addr -= WORD_LENGTH_BYTES) {
+			tableModel.setValueAt(formatAddress(addr), row, ADDRESS_COLUMN);
 			try {
 				if (dataPerByte.isSelected()) {
-					for (int j = FIRST_BYTE_COLUMN; j <= LAST_BYTE_COLUMN; j++, addr--) {
+					/* Access word one byte at a time */
+					for (int bi = 0; bi < WORD_LENGTH_BYTES; bi++) {
 						int byteValue;
 						/*
 						 * Endianness determines whether byte position in value and
 						 * byte position in memory match.
 						 */
-						col = (endianness == LITTLE_ENDIAN) ? j : (LAST_BYTE_COLUMN-j) + FIRST_BYTE_COLUMN;
+						col = (endianness == LITTLE_ENDIAN) ? LAST_BYTE_COLUMN - bi : FIRST_BYTE_COLUMN + bi;
 						/*
-						 * MARS' check for addresses out of range is performed using word-aligned addresses.
+						 * MARS checks for addresses out of range using word-aligned addresses.
 						 * This means that the word on Memory.stackBaseAddress (highest stack address) can
 						 * be accessed during word-length data operations but not during half-word or byte-length
 						 * operations. This behavior is asymmetrical among the three memory configurations
 						 * supported by MARS.
 						 */
 						if (addr >= Memory.stackBaseAddress && addr <= (Memory.stackBaseAddress + (WORD_LENGTH_BYTES-1))) {
+							/* In case of highest stack address, access whole word and then 
+							 * use shift and bitwise operations to get each byte.
+							 */
 							int word = memInstance.getWordNoNotify(alignToCurrentWordBoundary(addr));
-							byteValue = (word >> (WORD_LENGTH_BYTES-j)) & 0xffff;
-							if (displayDataPerByte)
-								System.out.println("(" + row + "," + col + ") - " + addr +": " +
-										formatNByteLengthMemContents(1, byteValue));
-							tableModel.setValueAt(formatNByteLengthMemContents(1, byteValue), row, col);
+							byteValue = (word >> (bi << 3)) & 0xff;
 						} else {
-							byteValue = memInstance.getByte(addr);
-							if (displayDataPerByte)
-								System.out.println("(" + row + "," + col + ") - " + addr +": " +
-										formatNByteLengthMemContents(1, byteValue));
-							tableModel.setValueAt(formatNByteLengthMemContents(1, byteValue), row, col);
+							byteValue = memInstance.getByte(addr + bi);
 						}
+						tableModel.setValueAt(formatNByteLengthMemContents(1, byteValue), row, col);
 					}
 				} else {
-					col = WORD_COLUMN;
-					addr -= WORD_LENGTH_BYTES-1; // TODO simplify addr update
-					tableModel.setValueAt(formatNByteLengthMemContents(WORD_LENGTH_BYTES, memInstance.getWord(addr--)), row, col);
+					tableModel.setValueAt(formatNByteLengthMemContents(WORD_LENGTH_BYTES, memInstance.getWord(addr)),
+							row, WORD_COLUMN);
 				}
 				if (printMemContents) {
 					System.out.print(tableModel.getValueAt(row, 0) + ": ");
