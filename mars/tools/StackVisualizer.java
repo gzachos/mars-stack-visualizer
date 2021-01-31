@@ -767,8 +767,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				try {
 					Integer rasTopAddress = ras.remove(ras.size()-1);
 					if (rasTopAddress.compareTo(jalStatementAddress) != 0) {
-						System.err.println("Mismatching return address: " + rasTopAddress + " - " + jalStatementAddress +
-								" (ras vs jal)");
+						System.err.println("Mismatching return address: " + formatAddress(rasTopAddress) + " vs " + formatAddress(jalStatementAddress) +
+								" (Expected/jal vs Actual/jr)");
 					}
 				} catch (IndexOutOfBoundsException iobe) {
 					/* Exception is thrown whenever:
@@ -803,12 +803,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		ras.add(stmnt.getAddress());
 		Integer count = activeFunctionCallStats.addCall(targetLabel);
 		frameNameToBeCreated = targetLabel + " (" + count + ")";
-//		System.out.println("Subroutine call from: " + stmnt.getAddress() + " to " + frameNameToBeCreated);
-//		System.out.print("{");
-//		for (int addr : ras) {
-//			System.out.print(formatAddress(addr) + ", ");
-//		}
-//		System.out.println("}");
 	}
 
 
