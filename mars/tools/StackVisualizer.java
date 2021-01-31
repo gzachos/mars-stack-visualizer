@@ -412,10 +412,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	@Override
 	protected void initializePostGUI() {
-		if (inStandAloneMode == true) {
-			getStackData();
-			updateSpDataRowColIndex();
-		} else {
+		if (inStandAloneMode == false) {
 			connectButton.addActionListener(new ActionListener() {
 				@Override
 				public void actionPerformed(ActionEvent e) {
@@ -434,9 +431,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 						 */
 						disableBackStepper();
 
-						getStackData();
-						updateSpDataRowColIndex();
-						table.repaint();
+						refreshGui();
 
 						String msg = "Back Stepping has been disabled.\n"
 								+ "Already running programs should be assembled again.";
@@ -447,7 +442,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		}
 		addNewTableRows(INITIAL_ROW_COUNT);
 		updateSpDataRowColIndex();
-		table.repaint(); // Maybe we can remove this
+		table.repaint();
 	}
 
 
@@ -575,6 +570,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 
+	/**
+	 * Processes a received register update/notice (Read or Write).
+	 */
 	private void processRegisterAccessNotice(RegisterAccessNotice notice) {
 		// Currently only $sp is observed
 		// TODO: What about observing frame pointer?
@@ -598,6 +596,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 
+	/**
+	 * Processes a received memory update/notice (Read or Write) targeting the stack segment.
+	 */
 	private void processStackMemoryUpdate(MemoryAccessNotice notice) {
 		String regName = "", frameName = "";
 
@@ -693,6 +694,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 
+	/**
+	 * Processes a received memory update/notice (Read or Write).
+	 */
 	private void processTextMemoryUpdate(MemoryAccessNotice notice) {
 		if (notice.getAccessType() == AccessNotice.WRITE)
 			return;
@@ -747,7 +751,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				int targetRegister = stmnt.getOperand(R_RS_OPERAND_LIST_INDEX);
 				Register reg = RegisterFile.getRegisters()[targetRegister];
 				int returnAddress = reg.getValue();
-				// returnAddress-4 is needed as PC+4 is stored in $ra when jal is executed.
+				// returnAddress-WORD_LENGTH_BYTES is needed as PC+WORD_LENGTH_BYTES is stored in $ra when jal is executed.
 				int jalStatementAddress = returnAddress - WORD_LENGTH_BYTES;
 				ProgramStatement jalStatement =  memInstance.getStatementNoNotify(jalStatementAddress);
 				int jalTargetAddress = jalStatement.getOperand(J_ADDR_OPERAND_LIST_INDEX) * WORD_LENGTH_BYTES;
@@ -869,6 +873,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 
+	/**
+	 * Disables back stepping.
+	 */
 	private void disableBackStepper() {
 		/*
 		 * The ignoreObserving flag is required for disabling
@@ -889,6 +896,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 
+	/**
+	 * Re-enables back stepping.
+	 */
 	private void restoreBackStepper() {
 		if (disabledBackStep) {
 			disabledBackStep = false;
@@ -906,6 +916,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 
+	/**
+	 * Enables or disables Run buttons as of parameter.
+	 */
 	private void runButtonsSetEnabled(boolean enable) {
 		if (enable == true)
 			FileStatus.set(FileStatus.RUNNABLE);
@@ -998,6 +1011,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		if (debug) {
 			System.out.println("ToolReset");
 		}
+		refreshGui();
+	}
+	
+	
+	/**
+	 * Refresh memory contents and $sp position in table.
+	 */
+	private void refreshGui() {
 		getStackData();
 		updateSpDataRowColIndex();
 		table.repaint();
@@ -1019,6 +1040,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 
+	/**
+	 * Empties the contents of columns "Stored Reg" and "Call Layout" between
+	 * rows [{@code startRow}, {@code endRow}].
+	 */
 	private void resetStoredRegAndFrameNameColumns(int startRow, int endRow) {
 		for (int row = startRow; row <= endRow; row++) {
 			tableModel.setValueAt("", row, storedRegisterColumn);
@@ -1027,6 +1052,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 
+	/**
+	 * Calculate table column index when offset from last table column is provided.
+	 * 
+	 * @param offsetFromEnd the offset from last table column (starting from 0).
+	 * @return the table column index.
+	 */
 	private int calcTableColIndex(int offsetFromEnd) {
 		return numberOfColumns - offsetFromEnd - 1;
 	}
@@ -1079,9 +1110,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			ras.clear();
 			activeFunctionCallStats.reset();
 			resetStoredRegAndFrameNameColumns(0, numberOfRows-1);
-			getStackData();
-			updateSpDataRowColIndex();
-			table.repaint();
+			refreshGui();
 		}
 		disableBackStepper();
 		connectButton.setEnabled(false);
@@ -1103,11 +1132,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	/**
 	 * @return true if we are in stepped execution.
 	 */
-//	private boolean inSteppedExecution() {
-//		if (Globals.program == null)
-//			return false;
-//		return Globals.program.inSteppedExecution();
-//	}
+	@SuppressWarnings("unused")
+	private boolean inSteppedExecution() {
+		if (Globals.program == null)
+			return false;
+		return Globals.program.inSteppedExecution();
+	}
 
 
 	@Override
