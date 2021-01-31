@@ -113,6 +113,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 */
 	/** Register number of stack pointer (29) */
 	private final int     SP_REG_NUMBER             = RegisterFile.STACK_POINTER_REGISTER;
+	/** Register number of return address (31) */
+	private final int     RA_REG_NUMBER             = RegisterFile.getNumber("$ra");
 	/** Stack pointer's initial address/value */
 	private final int     SP_INIT_ADDR              = Memory.stackPointer;
 	private final Memory  memInstance               = Memory.getInstance();
@@ -138,6 +140,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private String        regNameToBeStoredInStack  = null;
 	/** Name of the (subroutine) frame to be allocated in stack segment. */
 	private String        frameNameToBeCreated      = null;
+	/** Whether $ra was written/updated in the last instruction. */
+	private boolean       raWrittenInPrevInstr      = false;
 	/**
 	 * Return Address Stack. Target addresses of jal instructions are pushed and
 	 * then are popped and matched when jr instructions are encountered.
@@ -544,6 +548,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		 */
 		addAsObserver(RegisterFile.getRegisters()[SP_REG_NUMBER]);
 		addAsObserver(Memory.textBaseAddress, Memory.textLimitAddress);
+		addAsObserver(RegisterFile.getRegisters()[RA_REG_NUMBER]);
 	}
 
 
@@ -551,6 +556,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	protected void deleteAsObserver() {
 		super.deleteAsObserver(); // Stop observing memory (default)
 		deleteAsObserver(RegisterFile.getRegisters()[SP_REG_NUMBER]); // Stop observing $sp
+		deleteAsObserver(RegisterFile.getRegisters()[RA_REG_NUMBER]); // Stop observing $ra
 	}
 
 
@@ -576,7 +582,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 
 	private void processRegisterAccessNotice(RegisterAccessNotice notice) {
-		// Currently only $sp is observed
+		// Currently only $sp is observed ($ra also but not for stack modification ops)
 		// TODO: What about observing frame pointer?
 		if (notice.getAccessType() == AccessNotice.READ)
 			return;
@@ -594,6 +600,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				addNewTableRows(5);
 			}
 			table.repaint(); // Required for coloring $sp position during popping.
+		} else if (notice.getRegisterName().equals("$ra")) {
+			raWrittenInPrevInstr = true;
 		}
 	}
 
@@ -695,6 +703,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		}
 //		printBin(notice.getValue());
 
+		boolean localRaWrittenInPrevInstr = raWrittenInPrevInstr;
+		raWrittenInPrevInstr = false;
+
 		try {
 			ProgramStatement stmnt =  memInstance.getStatementNoNotify(notice.getAddress());
 
@@ -724,6 +735,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				String targetLabel = addrToTextSymbol(targetAdrress);
 				if (isJumpAndLinkInstruction(instrName)) {
 					registerNewSubroutineCall(stmnt, targetLabel);
+				} else if (isJumpInstruction(instrName)) {
+					if (localRaWrittenInPrevInstr == true) {
+						registerNewSubroutineCall(stmnt, targetLabel);
+					}
 				}
 				if (targetLabel != null) {
 					if (debug) {
