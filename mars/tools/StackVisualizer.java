@@ -621,7 +621,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					" (stored: " + regName + ")");
 		}
 
-		int row = getTableRowIndex(notice.getAddress());
+		int row;
+		try {
+			row = getTableRowIndex(notice.getAddress());
+		} catch (SVException sve) {
+			System.err.println("processStackMemoryUpdate(): " + sve.getMessage());
+			return;
+		}
 
 		if (debug)
 			System.out.println("Addr: " + formatAddress(notice.getAddress()) + " - tableIndex: " + row + " (" + regName + ")");
@@ -649,16 +655,19 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	/**
 	 * @return the index of the table row that {@code memAddress} should be stored
 	 * if it belongs to the stack segment; else (-1).
+	 * @throws SVException 
 	 */
-	private int getTableRowIndex(int memAddress) {
+	private int getTableRowIndex(int memAddress) throws SVException {
 		if (!isStackSegAddress(memAddress)) {
-			System.err.println("getTableRowIndex() only works for stack segment addresses");
-			return -1;
+			throw new SVException("An address not in the stack segment was provided");
 		}
 		int rowIndex = (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
 		if (rowIndex >= numberOfRows) {
 			addNewTableRows(rowIndex - numberOfRows + 10);
 			table.repaint();
+		}
+		if (rowIndex < 0) { // Higher address than $sp value at program start
+			throw new SVException("Addresses higher than " + formatAddress(maxSpValueWordAligned) + " are not currently supported");
 		}
 		return rowIndex;
 	}
@@ -667,12 +676,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	/**
 	 * @return the index of the table column that {@code memAddress} should be stored
 	 * if it belongs to the stack segment; else (-1).
+	 * @throws SVException 
 	 */
-	private int getTableColumnIndex(int memAddress) {
-		if (!isStackSegAddress(memAddress)) {
-			System.err.println("getTableColumnIndex() only works for stack segment addresses");
-			return -1;
-		}
+	private int getTableColumnIndex(int memAddress) throws SVException {
+		if (!isStackSegAddress(memAddress))
+			throw new SVException("An address not in the stack segment was provided");
 		return LAST_BYTE_COLUMN - (memAddress % WORD_LENGTH_BYTES);
 	}
 
@@ -1002,8 +1010,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 */
 	private void updateSpDataRowColIndex() {
 		int spValue = getSpValue();
-		spDataRowIndex = getTableRowIndex(spValue);
-		spDataColumnIndex = getTableColumnIndex(spValue);
+		try {
+			spDataRowIndex = getTableRowIndex(spValue);
+			spDataColumnIndex = getTableColumnIndex(spValue);
+		} catch (SVException sve) {
+			System.err.println("updateSpDataRowColIndex(): " + sve.getMessage());
+		}
 	}
 
 
@@ -1180,6 +1192,16 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		 */
 		public void reset() {
 			activeCalls.clear();
+		}
+	}
+	
+
+	/**
+	 * Trivial {@link Exception} implementation for {@link StackVisualizer}.
+	 */
+	private static class SVException extends Exception {
+		public SVException(String message) {
+			super(message);
 		}
 	}
 
