@@ -85,10 +85,10 @@ import mars.venus.VenusUI;
 @SuppressWarnings({ "serial", "deprecation" })
 public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static String name        = "Stack Visualizer";
-	private static String versionID   = "1.0";
+	private static String versionID   = "1.5";
 	private static String version     = "Version " + versionID + " (George Z. Zachos, Petros Manousis)";
 	private static String heading     = "Visualizing Stack Modification Operations";
-	private static String releaseDate = "30-Sep-2019";
+	private static String releaseDate = "03-Feb-2021";
 
 	// We need the following definition here to initialize numberOfColumns
 	/** Table column names for displaying data per byte. */
@@ -1194,7 +1194,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				+ "About\n"
 				+ "This tool allows the user to view in real time the $sp-relative memory modification\n"
 				+ "operations taking place in the stack segment. The user can also observe how the stack\n"
-				+ " grows. The address pointed by the stack pointer is displayed in an orange background\n"
+				+ "grows. The address pointed by the stack pointer is displayed in an orange background\n"
 				+ "while the whole word-length data in a yellow one. Lower addresses have a grey\n"
 				+ "background (given that stack growth takes place form higher to lower addresses).\n"
 				+ "The names of the registers whose contents are stored (sw, sh, sb etc.) in the\n"
