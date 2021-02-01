@@ -163,7 +163,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	/** Current number of table columns. */
 	private int           numberOfColumns           = colNamesWhenDataPerByte.length;
 	/** Current number of table rows. (-1) before table initialization. */
-	private int           numberOfRows              = -1;
+	private int           numberOfRows              = 0;
 	/** Offset of frame name ("Call Layout") column from table end. */
 	private final int     frameNameColOffsetFromEnd = 0;
 	/** Offset of stored register column from table end. */
@@ -641,13 +641,25 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	/**
 	 * Adds more rows in table.
 	 *
-	 * @param rowNumber the number of rows to add.
+	 * @param numRowsToAdd the number of rows to add.
 	 */
-	private void addNewTableRows(int rowNumber) {
-		for (int ri = 0; ri < rowNumber; ri++)
+	private void addNewTableRows(int numRowsToAdd) {
+		int remainingRowsToAdd = maxTableRowsAllowed() - numberOfRows;
+		if (numRowsToAdd > remainingRowsToAdd)
+			numRowsToAdd = remainingRowsToAdd;
+		for (int ri = 0; ri < numRowsToAdd; ri++)
 			tableModel.addRow(new Object[numberOfColumns]);
 		numberOfRows = tableModel.getRowCount();
 		getStackData();
+	}
+	
+	
+	/**
+	 * @return the maximum allowed number of table rows.
+	 * Matches the number of words in the stack segment.
+	 */
+	private int maxTableRowsAllowed() {
+		return (Memory.stackBaseAddress - Memory.stackLimitAddress) / WORD_LENGTH_BYTES;
 	}
 
 
@@ -658,7 +670,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 */
 	private int getTableRowIndex(int memAddress) throws SVException {
 		if (!isStackSegAddress(memAddress)) {
-			throw new SVException("An address not in the stack segment was provided");
+			throw new SVException("An address not in the stack segment was provided (" + formatAddress(memAddress) + ")");
 		}
 		int rowIndex = (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
 		if (rowIndex >= numberOfRows) {
@@ -666,7 +678,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			table.repaint();
 		}
 		if (rowIndex < 0) { // Higher address than $sp value at program start
-			throw new SVException("Addresses higher than " + formatAddress(maxSpValueWordAligned) + " are not currently supported");
+			throw new SVException("Addresses higher than " + formatAddress(maxSpValueWordAligned) + 
+					" are not currently supported ("  + formatAddress(memAddress) + ")");
 		}
 		return rowIndex;
 	}
@@ -679,7 +692,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 */
 	private int getTableColumnIndex(int memAddress) throws SVException {
 		if (!isStackSegAddress(memAddress))
-			throw new SVException("An address not in the stack segment was provided");
+			throw new SVException("An address not in the stack segment was provided (" + formatAddress(memAddress) + ")");
 		return LAST_BYTE_COLUMN - (memAddress % WORD_LENGTH_BYTES);
 	}
 
@@ -688,7 +701,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 * @return true if {@code memAddress} is in stack segment; else false.
 	 */
 	private boolean isStackSegAddress(int memAddress) {
-		return (memAddress >= Memory.stackLimitAddress && memAddress <= Memory.stackBaseAddress);
+		/*
+		 * In default memory configuration .stackLimitAddress is address 0x7fbffffc instead of 0x10040000
+		 * mentioned in "MIPS Memory Configuration" window. 
+		 * TODO Fix check for Default memory configuration? In this case addAsObserver() and maxTableRowsAllowed()
+		 * will need to be fixed too.
+		 */
+		return (memAddress > Memory.stackLimitAddress && memAddress <= Memory.stackBaseAddress);
 	}
 
 
