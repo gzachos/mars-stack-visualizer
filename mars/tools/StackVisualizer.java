@@ -76,7 +76,7 @@ import mars.venus.VenusUI;
  * place form higher to lower addresses). The names of the registers whose contents are stored (sw, sh, sb etc.) in the stack,
  * are shown in the "Stored Reg" column. In the "Call Layout" column, the subroutine frame (activation record) layout is displayed,
  * with subroutine names placed on the highest address of the corresponding frames.
- * 
+ *
  * GitHub repository: <a href="https://github.com/gzachos/mars-stack-visualizer">https://github.com/gzachos/mars-stack-visualizer</a>
  *
  * @author George Z. Zachos <gzachos@cse.uoi.gr>
@@ -128,10 +128,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private final int     J_ADDR_OPERAND_LIST_INDEX = 0;
 	/** R-format RS (source register) index in operand list. */
 	private final int     R_RS_OPERAND_LIST_INDEX   = 0;
-	/** Initial maximum value stack pointer can get: {@code SP_INIT_ADDR + (WORD_LENGTH_BYTES-1)}. */
-	private final int     INITIAL_MAX_SP_VALUE      = SP_INIT_ADDR + (WORD_LENGTH_BYTES - 1); // Max byte address
-	/** Maximum value stack pointer can currently take (not word-aligned). */
-	private int           maxSpValue                = INITIAL_MAX_SP_VALUE;
 	/** Maximum value stack pointer can currently take (word-aligned). */
 	private int           maxSpValueWordAligned     = SP_INIT_ADDR;
 	/** Register name to be stored in stack segment. */
@@ -148,6 +144,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 * (called but is yet to complete execution).
 	 */
 	private final ActiveSubroutineStats activeFunctionCallStats = new ActiveSubroutineStats();
+	/** Current stack base address. Used to detect memory configuration changes */
+	private int currStackBaseAddress = Memory.stackBaseAddress;
 
 	// GUI-Related fields
 	private final int     windowWidth               = 600;
@@ -492,7 +490,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 						 * supported by MARS.
 						 */
 						if (addr >= Memory.stackBaseAddress && addr <= (Memory.stackBaseAddress + (WORD_LENGTH_BYTES-1))) {
-							/* In case of highest stack address, access whole word and then 
+							/* In case of highest stack address, access whole word and then
 							 * use shift and bitwise operations to get each byte.
 							 */
 							int word = memInstance.getWordNoNotify(alignToCurrentWordBoundary(addr));
@@ -656,7 +654,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	/**
 	 * @return the index of the table row that {@code memAddress} should be stored
 	 * if it belongs to the stack segment; else (-1).
-	 * @throws SVException 
+	 * @throws SVException
 	 */
 	private int getTableRowIndex(int memAddress) throws SVException {
 		if (!isStackSegAddress(memAddress)) {
@@ -677,7 +675,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	/**
 	 * @return the index of the table column that {@code memAddress} should be stored
 	 * if it belongs to the stack segment; else (-1).
-	 * @throws SVException 
+	 * @throws SVException
 	 */
 	private int getTableColumnIndex(int memAddress) throws SVException {
 		if (!isStackSegAddress(memAddress))
@@ -1013,8 +1011,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		}
 		refreshGui();
 	}
-	
-	
+
+
 	/**
 	 * Refresh memory contents and $sp position in table.
 	 */
@@ -1054,7 +1052,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	/**
 	 * Calculate table column index when offset from last table column is provided.
-	 * 
+	 *
 	 * @param offsetFromEnd the offset from last table column (starting from 0).
 	 * @return the table column index.
 	 */
@@ -1093,6 +1091,23 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 
 	/**
+	 * Checks if {@code MemoryConfiguration} has changes and if yes,
+	 * performs the required actions.
+	 */
+	private void checkMemConfChanged() {
+		int newStackBaseAddr = Memory.stackBaseAddress;
+		if (newStackBaseAddr != currStackBaseAddress) {
+			if (debug)
+				System.out.println("Memory configuration change detected");
+			currStackBaseAddress = newStackBaseAddr;
+			maxSpValueWordAligned = Memory.stackPointer;
+			deleteAsObserver();
+			addAsObserver(); /* Start observing the new resources */
+			refreshGui();
+		}
+	}
+
+	/**
 	 * Callback method after a simulation starts.
 	 * A simulation starts each time a Run button is pressed (stepped or not).
 	 */
@@ -1103,6 +1118,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		if (VenusUI.getReset()) { // GUI Reset button clicks are also handled here.
 			if (debug)
 				System.out.println("GUI registers/memory reset detected");
+			/*
+			 * On memory configuration changes, the registers are reset.
+			 */
+			checkMemConfChanged();
 			/*
 			 * On registers/memory reset, clear data related to subroutine calls,
 			 * and reset/update table data.
@@ -1224,7 +1243,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			activeCalls.clear();
 		}
 	}
-	
+
 
 	/**
 	 * Trivial {@link Exception} implementation for {@link StackVisualizer}.
