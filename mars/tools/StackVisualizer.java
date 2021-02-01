@@ -437,6 +437,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					}
 				}
 			});
+		} else {
+			/*
+			 * Required to support memory configurations other than the default in
+			 * the stand-alone mode.
+			 */
+			checkMemConfChanged();
 		}
 		addNewTableRows(INITIAL_ROW_COUNT);
 		updateSpDataRowColIndex();
