@@ -469,8 +469,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		 * stack. Nevertheless, in all three configurations, the initial address pointed
 		 * by $sp is a valid address whose contents can be written.
 		 *
-		 * TODO support visualization of addresses higher than initial $sp value
-		 *
 		 * Initial value of spAddr is 0x7FFFEFFC = 2147479548 (Default MIPS memory configuration).
 		 * The first 4 bytes (1 word) to be displayed are:
 		 * 0x7FFFEFFF, 0x7FFFEFFE, 0x7FFFEFFD, 0x7FFFEFFC or in decimal value:
@@ -536,11 +534,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		// To observe stack segment, actual parameters should be
 		// reversed due to higher to lower address stack growth.
 		addAsObserver(Memory.stackLimitAddress, Memory.stackBaseAddress);
-		/*
-		 * TODO: verify that Memory.stackBaseAdress+1 to Memory.stackBaseAdress+3
-		 * can be observed during half word- or byte-length operations.
-		 * Update check in getTableRowIndex() too if needed.
-		 */
 		addAsObserver(RegisterFile.getRegisters()[SP_REG_NUMBER]);
 		addAsObserver(Memory.textBaseAddress, Memory.textLimitAddress);
 	}
@@ -658,8 +651,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		numberOfRows = tableModel.getRowCount();
 		getStackData();
 	}
-	
-	
+
+
 	/**
 	 * @return the maximum allowed number of table rows.
 	 * Matches the number of words in the stack segment.
@@ -684,8 +677,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			table.repaint();
 		}
 		if (rowIndex < 0) { // Higher address than $sp value at program start
-			throw new SVException("Addresses higher than " + formatAddress(maxSpValueWordAligned) + 
-					" are not currently supported ("  + formatAddress(memAddress) + ")");
+			int numNewRows = -rowIndex;
+			int newMaxSpValueWordAligned = maxSpValueWordAligned + numNewRows * WORD_LENGTH_BYTES;
+			if (newMaxSpValueWordAligned > Memory.stackBaseAddress) {
+				numNewRows -= (newMaxSpValueWordAligned - Memory.stackBaseAddress) / WORD_LENGTH_BYTES;
+			}
+			maxSpValueWordAligned += numNewRows * WORD_LENGTH_BYTES;
+			addNewTableRows(numNewRows);
+			refreshGui();
+			return (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
 		}
 		return rowIndex;
 	}
@@ -709,7 +709,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private boolean isStackSegAddress(int memAddress) {
 		/*
 		 * In default memory configuration .stackLimitAddress is address 0x7fbffffc instead of 0x10040000
-		 * mentioned in "MIPS Memory Configuration" window. 
+		 * mentioned in "MIPS Memory Configuration" window.
 		 * TODO Fix check for Default memory configuration? In this case addAsObserver() and maxTableRowsAllowed()
 		 * will need to be fixed too.
 		 */
