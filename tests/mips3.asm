@@ -1,9 +1,9 @@
 	.globl main
 	.text
 main:
-#	li	$sp, 0x7ffffffc
-	li	$sp, 0x7fffffff
-	addi	$sp, $sp, -3
+	# Uncomment the following line when in Default memory configuration
+	# to go to the stack's highest address.
+#	li	$sp, 0x7ffffffc 
 	# Byte-length ops
 	li	$t1, 0xef
 	sb	$t1, 0($sp)
