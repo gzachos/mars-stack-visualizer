@@ -42,6 +42,7 @@ import javax.swing.JComponent;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSeparator;
 import javax.swing.JTable;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
@@ -70,13 +71,14 @@ import mars.venus.FileStatus;
 import mars.venus.VenusUI;
 
 /**
- * Allows the user to view in real time the $sp-relative memory modification operations taking place in the stack segment.
- * The user can also observe how the stack grows. The address pointed by the stack pointer is displayed in an orange background
- * while the whole word-length data in a yellow one. Lower addresses have a grey background (given that stack growth takes
- * place form higher to lower addresses). The names of the registers whose contents are stored (sw, sh, sb etc.) in the stack,
- * are shown in the "Stored Reg" column. In the "Call Layout" column, the subroutine frame (activation record) layout is displayed,
- * with subroutine names placed on the highest address of the corresponding frames.
- *
+ * Allows the user to view in real time the memory modification operations taking place in the stack segment with emphasis to
+ * `$sp`-relative memory accesses. The user can also observe how pushes/pops to/from the stack take place. The address pointed
+ * by the stack pointer is displayed in an orange background while the whole word-length data in a yellow one. Lower addresses
+ * have a grey background (given that stack growth takes place from higher to lower addresses). The names of the registers whose
+ * contents are stored (`sw`, `sh`, `sb` etc.) in the stack, are shown in the "Stored Reg" column. In the "Call Layout" column,
+ * the subroutine frame (activation record) layout is displayed, with subroutine names placed on the first address written in
+ * the corresponding frame.
+ * 
  * GitHub repository: <a href="https://github.com/gzachos/mars-stack-visualizer">https://github.com/gzachos/mars-stack-visualizer</a>
  *
  * @author George Z. Zachos <gzachos@cse.uoi.gr>
@@ -188,12 +190,14 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private JCheckBox     dataPerByte;
 	private JCheckBox     hexAddressesCheckBox;
 	private JCheckBox     hexValuesCheckBox;
+	private JCheckBox     jalEquivInstrCheckBox;
 	private final int     LIGHT_YELLOW = 0xFFFF99;
 	private final int     LIGHT_ORANGE = 0xFFC266;
 	private final int     LIGHT_GRAY   = 0xE0E0E0;
 	private final int     GRAY         = 0x999999;
 	private final int     WHITE        = 0xFFFFFF;
 	private boolean       disabledBackStep = false;
+	private boolean       detectJalEquivalentInstructions = false;
 	private final DefaultTableModel tableModel = new DefaultTableModel();
 
 	/** Used for debugging purposes. */
@@ -303,6 +307,21 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		});
 		hexValuesCheckBox.setSelected(true);
 		panel.add(hexValuesCheckBox, c);
+		
+		c.gridy++;
+		panel.add(new JSeparator(), c);
+		
+		c.gridy++;
+		jalEquivInstrCheckBox = new JCheckBox("Detect jal-equivalent instructions");
+		jalEquivInstrCheckBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				detectJalEquivalentInstructions = jalEquivInstrCheckBox.isSelected();
+			}
+		});
+		jalEquivInstrCheckBox.setSelected(false);
+		panel.add(jalEquivInstrCheckBox, c);
+		
 		return panel;
 	}
 
@@ -403,16 +422,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 
 	@Override
-	protected void initializePreGUI() {
-		if (inStandAloneMode == true)
-			return;
-
-		Simulator sim = Simulator.getInstance();
-		sim.addObserver(this);
-	}
-
-
-	@Override
 	protected void initializePostGUI() {
 		if (inStandAloneMode == false) {
 			connectButton.addActionListener(new ActionListener() {
@@ -441,13 +450,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					}
 				}
 			});
-		} else {
-			/*
-			 * Required to support memory configurations other than the default in
-			 * the stand-alone mode.
-			 */
-			checkMemConfChanged();
 		}
+		Simulator sim = Simulator.getInstance();
+		sim.addObserver(this);
+		
 		addNewTableRows(INITIAL_ROW_COUNT);
 		updateSpDataRowColIndex();
 		table.repaint();
@@ -770,7 +776,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				String targetLabel = addrToTextSymbol(targetAdrress);
 				if (isJumpAndLinkInstruction(instrName)) {
 					registerNewSubroutineCall(stmnt, targetLabel);
-				} else if (isJumpInstruction(instrName)) {
+				} else if (detectJalEquivalentInstructions == true && isJumpInstruction(instrName)) {
 					if (localRaWrittenInPrevInstr == true) {
 						registerNewSubroutineCall(stmnt, targetLabel);
 					}
@@ -1154,13 +1160,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private void onSimulationStart() {
 		if (!isObserving())
 			return;
-//		System.err.println("SIMULATION - START: " + inSteppedExecution());
 		if (VenusUI.getReset()) { // GUI Reset button clicks are also handled here.
 			if (debug)
 				System.out.println("GUI registers/memory reset detected");
-			/*
-			 * On memory configuration changes, the registers are reset.
-			 */
+			 /* On memory configuration changes, the registers are reset. */
 			checkMemConfChanged();
 			/*
 			 * On registers/memory reset, clear data related to subroutine calls,
@@ -1172,7 +1175,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			refreshGui();
 		}
 		disableBackStepper();
-		connectButton.setEnabled(false);
+		if (inStandAloneMode == false) {
+			/* Connect button is not available in stand-alone mode */
+			connectButton.setEnabled(false);
+		}
 	}
 
 
@@ -1183,8 +1189,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private void onSimulationEnd() {
 		if (!isObserving())
 			return;
-//		System.err.println("SIMULATION - END: " + inSteppedExecution());
-		connectButton.setEnabled(true);
+		if (inStandAloneMode == false) {
+			/* Connect button is not available in stand-alone mode */
+			connectButton.setEnabled(true);
+		}
 	}
 
 
@@ -1203,23 +1211,26 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	protected JComponent getHelpComponent() {
 		final String helpContent = "Stack Visualizer\n\n"
 				+ "Release: " + versionID + "   (" + releaseDate + ")\n\n"
-				+ "Developed by George Z. Zachos (gzachos@cse.uoi.gr) and\n"
-				+ "Petros Manousis (pmanousi@cs.uoi.gr) under the supervision of\n"
-				+ "Aristides (Aris) Efthymiou (efthym@cse.uoi.gr).\n\n"
+				+ "Developed by George Z. Zachos (gzachos@cse.uoi.gr) and Petros Manousis (pmanousi@cs.uoi.gr)\n"
+				+ "under the supervision of Aristides (Aris) Efthymiou (efthym@cse.uoi.gr).\n\n"
 				+ "About\n"
-				+ "This tool allows the user to view in real time the $sp-relative memory modification\n"
-				+ "operations taking place in the stack segment. The user can also observe how the stack\n"
-				+ "grows. The address pointed by the stack pointer is displayed in an orange background\n"
-				+ "while the whole word-length data in a yellow one. Lower addresses have a grey\n"
-				+ "background (given that stack growth takes place form higher to lower addresses).\n"
-				+ "The names of the registers whose contents are stored (sw, sh, sb etc.) in the\n"
-				+ "stack, are shown in the \"Stored Reg\" column. In the \"Call Layout\" column, the subroutine\n"
-				+ "frame (activation record) layout is displayed, with subroutine names placed on the highest\n"
-				+ "address of the corresponding frames.\n\n"
-				+ "GitHub repository: https://github.com/gzachos/mars-stack-visualizer\n\n"
+				+ "This tool allows the user to view in real time the memory modification operations taking place in the stack\n"
+				+ "segment with emphasis to $sp-relative memory accesses. The user can also observe how pushes/pops to/from the\n"
+				+ "stack take place. The address pointed by the stack pointer is displayed in an orange background while the whole\n"
+				+ "word-length data in a yellow one. Lower addresses have a grey background (given that stack growth takes place\n"
+				+ "from higher to lower addresses). The names of the registers whose contents are stored (sw, sh, sb etc.) in the\n"
+				+ "stack, are shown in the \"Stored Reg\" column. In the \"Call Layout\" column, the subroutine frame (activation record)\n"
+				+ "layout is displayed, with subroutine names placed on the first address written in the corresponding frame.\n\n"
+				+ "Options\n"
+				+ "1) \"Display data per byte\": When enabled, the bytes of each word (4 Bytes) are displayed separately.\n"
+				+ "2) \"Hexadecimal Addresses\": Whether memory addresses are formatted in hexadecimal or decimal representation.\n"
+				+ "3) \"Hexadecimal Values\": Whether memory content is formatted in hexadecimal or decimal representation.\n"
+				+ "4) \"Detect jal-equivalent instructions\": Whether instruction sequences equivalent to `jal` should be detected.\n"
+				+ "     In example, `la $sp, somelabel` immediately followed by `j somelabel`.\n\n"
+				+ "GitHub repository\n"
+				+ "https://github.com/gzachos/mars-stack-visualizer\n\n"
 				+ "Contact\n"
-				+ "For questions or comments contact: George Z. Zachos (gzachos@cse.uoi.gr) or\n"
-				+ "Aristides Efthymiou (efthym@cse.uoi.gr)";
+				+ "For questions or comments contact: George Z. Zachos (gzachos@cse.uoi.gr) or Aristides Efthymiou (efthym@cse.uoi.gr)";
 		JButton help = new JButton("Help");
 		help.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
