@@ -78,7 +78,7 @@ import mars.venus.VenusUI;
  * contents are stored (`sw`, `sh`, `sb` etc.) in the stack, are shown in the "Stored Reg" column. In the "Call Layout" column,
  * the subroutine frame (activation record) layout is displayed, with subroutine names placed on the first address written in
  * the corresponding frame.
- * 
+ *
  * GitHub repository: <a href="https://github.com/gzachos/mars-stack-visualizer">https://github.com/gzachos/mars-stack-visualizer</a>
  *
  * @author George Z. Zachos <gzachos@cse.uoi.gr>
@@ -307,10 +307,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		});
 		hexValuesCheckBox.setSelected(true);
 		panel.add(hexValuesCheckBox, c);
-		
+
 		c.gridy++;
 		panel.add(new JSeparator(), c);
-		
+
 		c.gridy++;
 		jalEquivInstrCheckBox = new JCheckBox("Detect jal-equivalent instructions");
 		jalEquivInstrCheckBox.addActionListener(new ActionListener() {
@@ -321,7 +321,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		});
 		jalEquivInstrCheckBox.setSelected(false);
 		panel.add(jalEquivInstrCheckBox, c);
-		
+
 		return panel;
 	}
 
@@ -453,7 +453,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		}
 		Simulator sim = Simulator.getInstance();
 		sim.addObserver(this);
-		
+
 		addNewTableRows(INITIAL_ROW_COUNT);
 		updateSpDataRowColIndex();
 		table.repaint();
@@ -1175,10 +1175,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			refreshGui();
 		}
 		disableBackStepper();
-		if (inStandAloneMode == false) {
-			/* Connect button is not available in stand-alone mode */
-			connectButton.setEnabled(false);
-		}
+		onSimStartEndSetEnabled(false);
 	}
 
 
@@ -1189,9 +1186,18 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private void onSimulationEnd() {
 		if (!isObserving())
 			return;
+		onSimStartEndSetEnabled(true);
+	}
+
+
+	/**
+	 * Enables/disables GUI components on simulation start/end.
+	 */
+	private void onSimStartEndSetEnabled(boolean enable) {
+		jalEquivInstrCheckBox.setEnabled(enable);
 		if (inStandAloneMode == false) {
-			/* Connect button is not available in stand-alone mode */
-			connectButton.setEnabled(true);
+			/* Connect button is not available in stand-alone mode. */
+			connectButton.setEnabled(enable);
 		}
 	}
 
