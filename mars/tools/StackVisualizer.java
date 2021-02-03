@@ -430,6 +430,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					if (connectButton.isConnected()) {
 						restoreBackStepper();
 					} else {
+						checkMemConfChanged();
 						/*
 						 * User program should be recompiled (and executed) after
 						 * StackVisualizer is launched. This is required for
@@ -451,9 +452,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				}
 			});
 		}
-		Simulator sim = Simulator.getInstance();
-		sim.addObserver(this);
-
+		checkMemConfChanged();
+		Simulator.getInstance().addObserver(this);
 		addNewTableRows(INITIAL_ROW_COUNT);
 		updateSpDataRowColIndex();
 		table.repaint();
@@ -531,6 +531,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				}
 			} catch (AddressErrorException aee) {
 				System.err.println("getStackData(): " + formatAddress(aee.getAddress()) + " AddressErrorException");
+			} catch (Exception e) {
+				e.printStackTrace();
 			}
 		}
 
@@ -560,7 +562,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	@Override
 	protected void processMIPSUpdate(Observable resource, AccessNotice notice) {
-		// System.out.println(notice.accessIsFromMIPS() +" " + notice.accessIsFromGUI() + " " + notice);
+//		System.out.println(notice.accessIsFromMIPS() +" " + notice.accessIsFromGUI() + " " + notice);
 
 		if (!notice.accessIsFromMIPS())
 			return;
@@ -669,10 +671,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 	/**
 	 * @return the maximum allowed number of table rows.
-	 * Matches the number of words in the stack segment.
 	 */
 	private int maxTableRowsAllowed() {
-		return (Memory.stackBaseAddress - Memory.stackLimitAddress) / WORD_LENGTH_BYTES;
+		return (maxSpValueWordAligned - Memory.stackLimitAddress) / WORD_LENGTH_BYTES;
 	}
 
 
@@ -724,8 +725,6 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		/*
 		 * In default memory configuration .stackLimitAddress is address 0x7fbffffc instead of 0x10040000
 		 * mentioned in "MIPS Memory Configuration" window.
-		 * TODO Fix check for Default memory configuration? In this case addAsObserver() and maxTableRowsAllowed()
-		 * will need to be fixed too.
 		 */
 		return (memAddress > Memory.stackLimitAddress && memAddress <= Memory.stackBaseAddress);
 	}
@@ -1143,13 +1142,22 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private void checkMemConfChanged() {
 		int newStackBaseAddr = Memory.stackBaseAddress;
 		if (newStackBaseAddr != currStackBaseAddress) {
-			if (debug)
-				System.out.println("Memory configuration change detected");
+			if (debug) {
+				System.out.println("Memory configuration change detected. New stack base address: "
+						+ formatAddress(newStackBaseAddr));
+			}
 			currStackBaseAddress = newStackBaseAddr;
 			maxSpValueWordAligned = Memory.stackPointer;
-			deleteAsObserver();
-			addAsObserver(); /* Start observing the new resources */
-			refreshGui();
+			if (isObserving()) {
+				/*
+				 * Without the isObserving check, in case memory configuration change is detected
+				 * when the tool is not connected, connecting it will result in observing two times
+				 * each resource and receiving two times the same access notices.
+				 */
+				deleteAsObserver();
+				addAsObserver(); /* Start observing the new resources */
+				refreshGui();
+			}
 		}
 	}
 
