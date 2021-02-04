@@ -197,9 +197,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private final int     GRAY         = 0x999999;
 	private final int     WHITE        = 0xFFFFFF;
 	private boolean       disabledBackStep = false;
+	private boolean       displayDataPerByte = true;
+	private boolean       displayHexAddresses = true;
+	private boolean       displayHexValues = true;
 	private boolean       detectJalEquivalentInstructions = false;
 	private final DefaultTableModel tableModel = new DefaultTableModel();
-
+	
 	/** Used for debugging purposes. */
 	private final boolean debug = false, printMemContents = false, debugBackStepper = false;
 
@@ -249,8 +252,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 				c.setBackground(calcTableCellColor(row, column));
 
-				if ((dataPerByte.isSelected() && column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN) ||
-						(!dataPerByte.isSelected() && column == WORD_COLUMN))
+				if ((displayDataPerByte && column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN) ||
+						(!displayDataPerByte && column == WORD_COLUMN))
 					setHorizontalAlignment(SwingConstants.RIGHT);
 				else if (column == storedRegisterColumn || column == frameNameColumn)
 					setHorizontalAlignment(SwingConstants.CENTER);
@@ -260,7 +263,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			}
 		});
 		// table.setAutoResizeMode( JTable.AUTO_RESIZE_OFF );
-		resizeTableColumns(true);
+		resizeTableColumns();
 
 		scrollPane = new JScrollPane(table);
 		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
@@ -277,7 +280,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		dataPerByte.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				if(dataPerByte.isSelected() == false)
+				displayDataPerByte = dataPerByte.isSelected();
+				if(displayDataPerByte == false)
 					transformTableModel(colNamesWhenNotDataPerByte);
 				else
 					transformTableModel(colNamesWhenDataPerByte);
@@ -289,6 +293,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		hexAddressesCheckBox.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
+				displayHexAddresses = hexAddressesCheckBox.isSelected();
 				getStackData();
 				table.repaint();
 			}
@@ -301,6 +306,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		hexValuesCheckBox.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
+				displayHexValues = hexValuesCheckBox.isSelected();
 				getStackData();
 				table.repaint();
 			}
@@ -338,7 +344,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		if (row == spDataRowIndex) {
 			color = LIGHT_YELLOW;
 			// $sp cell coloring doesn't work with user column reordering
-			if (dataPerByte.isSelected() && column == spDataColumnIndex)
+			if (displayDataPerByte && column == spDataColumnIndex)
 				color = LIGHT_ORANGE;
 		}
 		else if (row > spDataRowIndex) {
@@ -351,13 +357,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	}
 
 
-	private void resizeTableColumns(boolean dataPerByte) {
+	private void resizeTableColumns() {
 		TableColumnModel columnModel = table.getColumnModel();
 		for (int colIndex = 0 ; colIndex < columnModel.getColumnCount(); colIndex++) {
 			TableColumn col = columnModel.getColumn(colIndex);
 			int min, pref;
 			min = pref = 75;
-			if (dataPerByte) {
+			if (displayDataPerByte) {
 				if (colIndex >= FIRST_BYTE_COLUMN && colIndex <= LAST_BYTE_COLUMN) {
 					min = 25;
 					pref = 50;
@@ -388,7 +394,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 *
 	 * @param columnNames the new table columns.
 	 */
-	private void transformTableModel(String columnNames[]) {
+	private synchronized void transformTableModel(String columnNames[]) {
 		Object storedRegColumnData[] = new Object[numberOfRows];
 		Object frameNameColumnData[] = new Object[numberOfRows];
 
@@ -408,7 +414,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		numberOfRows = tableModel.getRowCount();
 		frameNameColumn = calcTableColIndex(frameNameColOffsetFromEnd);
 		storedRegisterColumn = calcTableColIndex(storedRegColOffsetFromEnd);
-		resizeTableColumns(dataPerByte.isSelected());
+		resizeTableColumns();
 
 		// Restore toredRegister and frameName columns
 		for (int row = 0; row < numberOfRows; row++) {
@@ -461,18 +467,44 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 
 	/**
-	 * Fills table with data directly from Mars' memory instance.
+	 * Equivalent to {@code getStackData(0, numberOfRows)}.
+	 */
+	private void getStackData() {
+		getStackData(0, numberOfRows-1);
+	}
+
+
+	/**
+	 * Equivalent to {@code getStackData(row, row)}.
+	 */
+	private void getStackData(int row) {
+		getStackData(row, row);
+	}
+
+
+	/**
+	 * Fills/updates table rows [{@code startRow}, {@code endRow}] with data directly
+	 *  from Mars' memory instance.
 	 *
 	 * This method fires a {@link MemoryAccessNotice} every time it reads from memory.
 	 * For this reason it should not be called in a code block handling a
 	 * {@link MemoryAccessNotice} of {@code AccessNotice.READ} type as it will lead
 	 * in infinite recursive calls of itself.
 	 */
-	private void getStackData() {
-		int col;
+	private synchronized void getStackData(int startRow, int endRow) {
+		int row, col, addr;
+
+		if (startRow < 0 || endRow < 0 || endRow >= numberOfRows) {
+			if (printMemContents)
+				System.out.println("getStackData end (invalid arguments)\n");
+			return;
+		}
 
 		if (printMemContents)
-			System.out.println("getStackData start");
+			System.out.println("getStackData(" + row + "," + endRow + ") start");
+		
+		addr = maxSpValueWordAligned - startRow * WORD_LENGTH_BYTES;
+		
 		/*
 		 * MARS supports three memory configurations. Only in the default configuration
 		 * the initial stack pointer value does NOT point to the highest address of the
@@ -484,10 +516,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		 * 0x7FFFEFFF, 0x7FFFEFFE, 0x7FFFEFFD, 0x7FFFEFFC or in decimal value:
 		 * 2147479551, 2147479550, 2147479549, 2147479548.
 		 */
-		for (int row = 0, addr = maxSpValueWordAligned; row < numberOfRows; row++, addr -= WORD_LENGTH_BYTES) {
+		for (row = startRow; row <= endRow; row++, addr -= WORD_LENGTH_BYTES) {
 			tableModel.setValueAt(formatAddress(addr), row, ADDRESS_COLUMN);
 			try {
-				if (dataPerByte.isSelected()) {
+				if (displayDataPerByte) {
 					/* Access word one byte at a time */
 					for (int bi = 0; bi < WORD_LENGTH_BYTES; bi++) {
 						int byteValue;
@@ -520,7 +552,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				}
 				if (printMemContents) {
 					System.out.print(tableModel.getValueAt(row, 0) + ": ");
-					if (dataPerByte.isSelected()) {
+					if (displayDataPerByte) {
 						for (int i = FIRST_BYTE_COLUMN; i <= LAST_BYTE_COLUMN; i++)
 							System.out.print(tableModel.getValueAt(row, i) + (i == LAST_BYTE_COLUMN ? "" : ","));
 					} else {
@@ -648,7 +680,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 
 		tableModel.setValueAt(regName, row, storedRegisterColumn);
 		tableModel.setValueAt(frameName, row, frameNameColumn);
-		getStackData();
+		getStackData(row);
 		table.repaint();
 	}
 
@@ -658,10 +690,13 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 *
 	 * @param numRowsToAdd the number of rows to add.
 	 */
-	private void addNewTableRows(int numRowsToAdd) {
+	private synchronized void addNewTableRows(int numRowsToAdd) {
 		int remainingRowsToAdd = maxTableRowsAllowed() - numberOfRows;
 		if (numRowsToAdd > remainingRowsToAdd)
 			numRowsToAdd = remainingRowsToAdd;
+		if (numRowsToAdd == 0) {
+			return;
+		}
 		for (int ri = 0; ri < numRowsToAdd; ri++)
 			tableModel.addRow(new Object[numberOfColumns]);
 		numberOfRows = tableModel.getRowCount();
@@ -990,7 +1025,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 * @return a string containing the hexadecimal or decimal representation of {@code memAddress}.
 	 */
 	private String formatAddress(int memAddress) {
-		if (hexAddressesCheckBox.isSelected())
+		if (displayHexAddresses)
 			return Binary.intToHexString(memAddress);
 		else
 			return Integer.toString(memAddress);
@@ -1007,7 +1042,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 * @return a string containing the hexadecimal or decimal representation of data.
 	 */
 	private String formatNByteLengthMemContents(int numBytes, int data) {
-		if (hexValuesCheckBox.isSelected())
+		if (displayHexValues)
 			return nBytesToHexStringNoPrefix(numBytes, data);
 		else
 			return Integer.toString(data);
@@ -1061,7 +1096,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	/**
 	 * Refresh memory contents and $sp position in table.
 	 */
-	private void refreshGui() {
+	private synchronized void refreshGui() {
 		getStackData();
 		updateSpDataRowColIndex();
 		table.repaint();
@@ -1087,7 +1122,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 * Empties the contents of columns "Stored Reg" and "Call Layout" between
 	 * rows [{@code startRow}, {@code endRow}].
 	 */
-	private void resetStoredRegAndFrameNameColumns(int startRow, int endRow) {
+	private synchronized void resetStoredRegAndFrameNameColumns(int startRow, int endRow) {
 		for (int row = startRow; row <= endRow; row++) {
 			tableModel.setValueAt("", row, storedRegisterColumn);
 			tableModel.setValueAt("", row, frameNameColumn);
@@ -1154,8 +1189,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				 * when the tool is not connected, connecting it will result in observing two times
 				 * each resource and receiving two times the same access notices.
 				 */
-				deleteAsObserver();
-				addAsObserver(); /* Start observing the new resources */
+				synchronized (Globals.memoryAndRegistersLock) {
+					deleteAsObserver();
+					addAsObserver(); /* Start observing the new resources */
+				}
 				refreshGui();
 			}
 		}
