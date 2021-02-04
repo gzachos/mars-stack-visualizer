@@ -1202,7 +1202,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 * Callback method after a simulation starts.
 	 * A simulation starts each time a Run button is pressed (stepped or not).
 	 */
-	private void onSimulationStart() {
+	private synchronized void onSimulationStart() {
 		if (!isObserving())
 			return;
 		if (VenusUI.getReset()) { // GUI Reset button clicks are also handled here.
@@ -1216,6 +1216,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			 */
 			ras.clear();
 			activeFunctionCallStats.reset();
+			tableModel.setRowCount(INITIAL_ROW_COUNT);
+			numberOfRows = tableModel.getRowCount();
 			resetStoredRegAndFrameNameColumns(0, numberOfRows-1);
 			refreshGui();
 		}
