@@ -40,10 +40,10 @@ address written in the corresponding frame.
 The source code was extracted using the following command: ```jar xf Mars4_5.jar```.
 
 ## Screenshots
-![sv2](./screenshots/sv2.png)
-![sv3](./screenshots/sv3.png)
-![sv4](./screenshots/sv4.png)
-![sv5](./screenshots/sv5.png)
+![sv2](./screenshots/sv2.png)</br>
+![sv3](./screenshots/sv3.png)</br>
+![sv4](./screenshots/sv4.png)</br>
+![sv5](./screenshots/sv5.png)</br>
 
-Application/Stand-alone program mode:
+Application/Stand-alone program mode: </br>
 ![sv-standalone](./screenshots/sv-standalone.png)
