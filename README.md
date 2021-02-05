@@ -11,7 +11,7 @@ The StackVisualizer tool and application allows the user to view in real time th
 memory modification operations taking place in the stack segment with emphasis to
 `$sp`-relative memory accesses. The user can also observe how pushes/pops to/from
 the stack take place. The address pointed by the stack pointer is displayed in an
-orange background while the whole word-length data in a yellow one. Lower addresses
+orange background while the whole word-length data in yellow. Lower addresses
 have a grey background (given that stack growth takes place from higher to lower addresses).
 The names of the registers whose contents are stored in the stack, are shown in the
 "Stored Reg" column. In the "Call Layout" column, the subroutine frame (activation record)
@@ -49,3 +49,9 @@ The source code was extracted using the following command: ```jar xf Mars4_5.jar
 
 Application/Stand-alone program mode: </br>
 ![sv-standalone](./screenshots/sv-standalone.png)
+
+## Creating JAR files
+After building this project, script `create-jar.sh` can be used to create an executable JAR file. It is provided as a replacement to `CreateMarsJar.bat` included in the original JAR file.
+
+```USAGE: ./create-jar.sh [JARNAME[.jar]]```
+

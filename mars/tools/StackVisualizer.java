@@ -73,7 +73,7 @@ import mars.venus.VenusUI;
 /**
  * Allows the user to view in real time the memory modification operations taking place in the stack segment with emphasis to
  * `$sp`-relative memory accesses. The user can also observe how pushes/pops to/from the stack take place. The address pointed
- * by the stack pointer is displayed in an orange background while the whole word-length data in a yellow one. Lower addresses
+ * by the stack pointer is displayed in an orange background while the whole word-length data in yellow. Lower addresses
  * have a grey background (given that stack growth takes place from higher to lower addresses). The names of the registers whose
  * contents are stored (`sw`, `sh`, `sb` etc.) in the stack, are shown in the "Stored Reg" column. In the "Call Layout" column,
  * the subroutine frame (activation record) layout is displayed, with subroutine names placed on the first address written in
@@ -1270,7 +1270,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				+ "This tool allows the user to view in real time the memory modification operations taking place in the stack\n"
 				+ "segment with emphasis to $sp-relative memory accesses. The user can also observe how pushes/pops to/from the\n"
 				+ "stack take place. The address pointed by the stack pointer is displayed in an orange background while the whole\n"
-				+ "word-length data in a yellow one. Lower addresses have a grey background (given that stack growth takes place\n"
+				+ "word-length data in yellow. Lower addresses have a grey background (given that stack growth takes place\n"
 				+ "from higher to lower addresses). The names of the registers whose contents are stored (sw, sh, sb etc.) in the\n"
 				+ "stack, are shown in the \"Stored Reg\" column. In the \"Call Layout\" column, the subroutine frame (activation record)\n"
 				+ "layout is displayed, with subroutine names placed on the first address written in the corresponding frame.\n\n"
