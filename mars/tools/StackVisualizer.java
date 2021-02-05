@@ -1,3 +1,27 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2018-2021 George Z. Zachos and Petros Manousis
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package mars.tools;
 
 import java.awt.Color;
@@ -18,6 +42,7 @@ import javax.swing.JComponent;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSeparator;
 import javax.swing.JTable;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
@@ -39,21 +64,45 @@ import mars.mips.hardware.RegisterAccessNotice;
 import mars.mips.hardware.RegisterFile;
 import mars.mips.instructions.Instruction;
 import mars.simulator.BackStepper;
+import mars.simulator.Simulator;
+import mars.simulator.SimulatorNotice;
 import mars.util.Binary;
+import mars.venus.FileStatus;
 import mars.venus.VenusUI;
 
-@SuppressWarnings({ "serial" })
+/**
+ * Allows the user to view in real time the memory modification operations taking place in the stack segment with emphasis to
+ * `$sp`-relative memory accesses. The user can also observe how pushes/pops to/from the stack take place. The address pointed
+ * by the stack pointer is displayed in an orange background while the whole word-length data in yellow. Lower addresses
+ * have a grey background (given that stack growth takes place from higher to lower addresses). The names of the registers whose
+ * contents are stored (`sw`, `sh`, `sb` etc.) in the stack, are shown in the "Stored Reg" column. In the "Call Layout" column,
+ * the subroutine frame (activation record) layout is displayed, with subroutine names placed on the first address written in
+ * the corresponding frame.
+ *
+ * GitHub repository: <a href="https://github.com/gzachos/mars-stack-visualizer">https://github.com/gzachos/mars-stack-visualizer</a>
+ *
+ * @author George Z. Zachos <gzachos@cse.uoi.gr>
+ * @author Petros Manousis <pmanousi@cs.uoi.gr>
+ */
+@SuppressWarnings({ "serial", "deprecation" })
 public class StackVisualizer extends AbstractMarsToolAndApplication {
-
 	private static String name        = "Stack Visualizer";
-	private static String versionID   = "1.0";
+	private static String versionID   = "1.5";
 	private static String version     = "Version " + versionID + " (George Z. Zachos, Petros Manousis)";
 	private static String heading     = "Visualizing Stack Modification Operations";
-	private static String releaseDate = "30-Sep-2019";
+	private static String releaseDate = "06-Feb-2021";
 
 	// We need the following definition here to initialize numberOfColumns
+	/** Table column names for displaying data per byte. */
 	private final String[] colNamesWhenDataPerByte = {"Address", "+3", "+2", "+1", "+0", "Stored Reg", "Call Layout"};
+	/** Table column names for displaying data per word. */
 	private final String[] colNamesWhenNotDataPerByte = {"Address", "Word-length Data", "Stored Reg", "Call Layout"};
+
+	/**
+	 * True if {@link StackVisualizer} is currently running
+	 * as a stand-alone program (MARS application)
+	 */
+	private static boolean inStandAloneMode = false;
 
 	/*
 	 * Memory.stackBaseAddress:  word-aligned
@@ -64,41 +113,76 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	 * Stack grows towards lower addresses: .stackBaseAddress > .stackLimitAddress
 	 * Word-length operations can take place in both .stackBaseAddress and .stackLimitAddress
 	 */
+	/** Register number of stack pointer (29) */
 	private final int     SP_REG_NUMBER             = RegisterFile.STACK_POINTER_REGISTER;
+	/** Register number of return address (31) */
+	private final int     RA_REG_NUMBER             = RegisterFile.getNumber("$ra");
+	/** Stack pointer's initial address/value */
 	private final int     SP_INIT_ADDR              = Memory.stackPointer;
 	private final Memory  memInstance               = Memory.getInstance();
 	private final boolean endianness                = memInstance.getByteOrder();
-	private final boolean LITTLE_ENDIAN             = Memory.LITTLE_ENDIAN;
-	private final int     WORD_LENGTH_BYTES         = Memory.WORD_LENGTH_BYTES;
-	private final int     WORD_LENGTH_BITS          = WORD_LENGTH_BYTES * 8;
-	private final int     I_RS_OPERAND_LIST_INDEX   = 0; // I-format RS (source register) index
-	private final int     J_ADDR_OPERAND_LIST_INDEX = 0; // J-format Address index
-	private final int     R_RS_OPERAND_LIST_INDEX   = 0; // R-format RS (source register) index
-	private final int     INITIAL_MAX_SP_VALUE      = SP_INIT_ADDR + (WORD_LENGTH_BYTES - 1); // Max byte address
-	private int           maxSpValue                = INITIAL_MAX_SP_VALUE;
+	private final boolean LITTLE_ENDIAN             = Memory.LITTLE_ENDIAN;       // for quick access
+	/** MIPS word length in bytes. */
+	private final int     WORD_LENGTH_BYTES         = Memory.WORD_LENGTH_BYTES;   // for quick access
+	/** MIPS word length in bits. */
+	private final int     WORD_LENGTH_BITS          = WORD_LENGTH_BYTES << 3;
+	/** I-format RS (source register) index in operand list. */
+	private final int     I_RS_OPERAND_LIST_INDEX   = 0;
+	/** J-format Address index in operand list. */
+	private final int     J_ADDR_OPERAND_LIST_INDEX = 0;
+	/** R-format RS (source register) index in operand list. */
+	private final int     R_RS_OPERAND_LIST_INDEX   = 0;
+	/** Maximum value stack pointer can currently take (word-aligned). */
 	private int           maxSpValueWordAligned     = SP_INIT_ADDR;
+	/** Register name to be stored in stack segment. */
 	private String        regNameToBeStoredInStack  = null;
+	/** Name of the (subroutine) frame to be allocated in stack segment. */
 	private String        frameNameToBeCreated      = null;
-	private final ArrayList<Integer> ras            = new ArrayList<Integer>(); // Return Address Stack
-	private final ActiveFunctionCallStats activeFunctionCallStats = new ActiveFunctionCallStats();
+	/** Whether $ra was written/updated in the last instruction. */
+	private boolean       raWrittenInPrevInstr      = false;
+	/**
+	 * Return Address Stack. Target addresses of jal instructions are pushed and
+	 * then are popped and matched when jr instructions are encountered.
+	 */
+	private final ArrayList<Integer> ras            = new ArrayList<Integer>();
+	/**
+	 * Active subroutine statistics. Stores how many times each subroutine is active
+	 * (called but is yet to complete execution).
+	 */
+	private final ActiveSubroutineStats activeFunctionCallStats = new ActiveSubroutineStats();
+	/** Current stack base address. Used to detect memory configuration changes */
+	private int currStackBaseAddress = Memory.stackBaseAddress;
 
 	// GUI-Related fields
-	private final VenusUI marsGui                   = Globals.getGui();
 	private final int     windowWidth               = 600;
 	private final int     windowHeight              = 600;
-	private final int     ADDRESS_COLUMN            = 0;  // Should always be in first column.
-	private final int     FIRST_BYTE_COLUMN         = 1;  // Should always be in second column.
+	/** Table column index where memory address should be stored. Should always be first column. */
+	private final int     ADDRESS_COLUMN            = 0;
+	/** Table column index where the first byte of memory data should be stored. Should always be second column. */
+	private final int     FIRST_BYTE_COLUMN         = 1;
+	/** Table column index where the last byte of memory data should be stored. */
 	private final int     LAST_BYTE_COLUMN          = FIRST_BYTE_COLUMN + (WORD_LENGTH_BYTES - 1);
+	/** Table column index where the word-length memory data should be stored. Should always be second column. */
 	private final int     WORD_COLUMN               = 1;
+	/** How many rows the table should initially have. */
 	private final int     INITIAL_ROW_COUNT         = 30;
+	/** Current number of table columns. */
 	private int           numberOfColumns           = colNamesWhenDataPerByte.length;
-	private int           numberOfRows              = -1;
-	private final int     frameNameColOffsetFromEnd = 1;
-	private final int     storedRegColOffsetFromEnd = 2;
-	private int           storedRegisterColumn      = numberOfColumns - storedRegColOffsetFromEnd;
-	private int           frameNameColumn           = numberOfColumns - frameNameColOffsetFromEnd;
+	/** Current number of table rows. (-1) before table initialization. */
+	private int           numberOfRows              = 0;
+	/** Offset of frame name ("Call Layout") column from table end. */
+	private final int     frameNameColOffsetFromEnd = 0;
+	/** Offset of stored register column from table end. */
+	private final int     storedRegColOffsetFromEnd = 1;
+	/** Table column index where frame name should be stored. */
+	private int           frameNameColumn           = calcTableColIndex(frameNameColOffsetFromEnd);
+	/** Table column index where stored register name should be stored. */
+	private int           storedRegisterColumn      = calcTableColIndex(storedRegColOffsetFromEnd);
+	/** Threshold to decide whether more table rows should be added. */
 	private final int     REMAINING_ROWS_THRESHOLD  = 5;
+	/** Table row where stack pointer points to. */
 	private int           spDataRowIndex            = 0;
+	/** Table column where stack pointer points to. */
 	private int           spDataColumnIndex         = LAST_BYTE_COLUMN;
 	private JTable        table;
 	private JPanel        panel;
@@ -106,39 +190,54 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private JCheckBox     dataPerByte;
 	private JCheckBox     hexAddressesCheckBox;
 	private JCheckBox     hexValuesCheckBox;
+	private JCheckBox     jalEquivInstrCheckBox;
 	private final int     LIGHT_YELLOW = 0xFFFF99;
 	private final int     LIGHT_ORANGE = 0xFFC266;
 	private final int     LIGHT_GRAY   = 0xE0E0E0;
 	private final int     GRAY         = 0x999999;
 	private final int     WHITE        = 0xFFFFFF;
 	private boolean       disabledBackStep = false;
+	private boolean       displayDataPerByte = true;
+	private boolean       displayHexAddresses = true;
+	private boolean       displayHexValues = true;
+	private boolean       detectJalEquivalentInstructions = false;
 	private final DefaultTableModel tableModel = new DefaultTableModel();
-
-	// Debug-related data
+	
+	/** Used for debugging purposes. */
 	private final boolean debug = false, printMemContents = false, debugBackStepper = false;
-	private final boolean displayDataPerByte = false;
+
 
 	protected StackVisualizer(String title, String heading) {
 		super(title, heading);
 	}
 
+
 	public StackVisualizer() {
 		super(StackVisualizer.name + ", " + StackVisualizer.version, StackVisualizer.heading);
 	}
+
+
+	/**
+	 * Main method provided for use as a MARS application (stand-alone program).
+	 */
+	public static void main(String[] args) {
+		inStandAloneMode = true;
+		new StackVisualizer(StackVisualizer.name + " stand-alone, " + StackVisualizer.version, StackVisualizer.heading).go();
+	}
+
 
 	@Override
 	public String getName() {
 		return name;
 	}
 
+
 	@Override
 	protected JComponent buildMainDisplayArea() {
 		GridBagConstraints c = new GridBagConstraints();
 		c.fill = GridBagConstraints.BOTH;
-		c.gridx = 0;
-		c.weightx = 1.0;
-		c.gridy = 0;
-		c.weighty = 1.0;
+		c.gridx = c.gridy = 0;
+		c.weightx = c.weighty = 1.0;
 		panel = new JPanel(new GridBagLayout());
 		panel.setPreferredSize(new Dimension(windowWidth, windowHeight));
 		for (String s : colNamesWhenDataPerByte)
@@ -151,23 +250,10 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			@Override
 			public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
 				final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-				int color = WHITE;
-				if (row == spDataRowIndex) {
-					color = LIGHT_YELLOW;
-					// $sp cell coloring doesn't work with user column reordering
-					if (dataPerByte.isSelected() && column == spDataColumnIndex)
-						color = LIGHT_ORANGE;
-				}
-				else if (row > spDataRowIndex) {
-					color = GRAY;
-				}
-				else if (row % 2 == 0) {
-						color = LIGHT_GRAY;
-				}
-				c.setBackground(new Color(color));
+				c.setBackground(calcTableCellColor(row, column));
 
-				if ((dataPerByte.isSelected() && column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN) ||
-						(!dataPerByte.isSelected() && column == WORD_COLUMN))
+				if ((displayDataPerByte && column >= FIRST_BYTE_COLUMN && column <= LAST_BYTE_COLUMN) ||
+						(!displayDataPerByte && column == WORD_COLUMN))
 					setHorizontalAlignment(SwingConstants.RIGHT);
 				else if (column == storedRegisterColumn || column == frameNameColumn)
 					setHorizontalAlignment(SwingConstants.CENTER);
@@ -177,7 +263,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			}
 		});
 		// table.setAutoResizeMode( JTable.AUTO_RESIZE_OFF );
-		resizeTableColumns(true);
+		resizeTableColumns();
 
 		scrollPane = new JScrollPane(table);
 		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
@@ -194,7 +280,8 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		dataPerByte.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				if(dataPerByte.isSelected() == false)
+				displayDataPerByte = dataPerByte.isSelected();
+				if(displayDataPerByte == false)
 					transformTableModel(colNamesWhenNotDataPerByte);
 				else
 					transformTableModel(colNamesWhenDataPerByte);
@@ -206,6 +293,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		hexAddressesCheckBox.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
+				displayHexAddresses = hexAddressesCheckBox.isSelected();
 				getStackData();
 				table.repaint();
 			}
@@ -218,22 +306,64 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		hexValuesCheckBox.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
+				displayHexValues = hexValuesCheckBox.isSelected();
 				getStackData();
 				table.repaint();
 			}
 		});
 		hexValuesCheckBox.setSelected(true);
 		panel.add(hexValuesCheckBox, c);
+
+		c.gridy++;
+		panel.add(new JSeparator(), c);
+
+		c.gridy++;
+		jalEquivInstrCheckBox = new JCheckBox("Detect jal-equivalent instructions");
+		jalEquivInstrCheckBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				detectJalEquivalentInstructions = jalEquivInstrCheckBox.isSelected();
+			}
+		});
+		jalEquivInstrCheckBox.setSelected(false);
+		panel.add(jalEquivInstrCheckBox, c);
+
 		return panel;
 	}
 
-	private void resizeTableColumns(boolean dataPerByte) {
+
+	/**
+	 * Calculates what color table cell ({@code row},{@code column}) should be colored.
+	 *
+	 * @param row table cell row.
+	 * @param column table cell column.
+	 * @return the calculated color.
+	 */
+	private Color calcTableCellColor(int row, int column) {
+		int color = WHITE;
+		if (row == spDataRowIndex) {
+			color = LIGHT_YELLOW;
+			// $sp cell coloring doesn't work with user column reordering
+			if (displayDataPerByte && column == spDataColumnIndex)
+				color = LIGHT_ORANGE;
+		}
+		else if (row > spDataRowIndex) {
+			color = GRAY;
+		}
+		else if (row % 2 == 0) {
+			color = LIGHT_GRAY;
+		}
+		return new Color(color);
+	}
+
+
+	private void resizeTableColumns() {
 		TableColumnModel columnModel = table.getColumnModel();
 		for (int colIndex = 0 ; colIndex < columnModel.getColumnCount(); colIndex++) {
 			TableColumn col = columnModel.getColumn(colIndex);
 			int min, pref;
 			min = pref = 75;
-			if (dataPerByte) {
+			if (displayDataPerByte) {
 				if (colIndex >= FIRST_BYTE_COLUMN && colIndex <= LAST_BYTE_COLUMN) {
 					min = 25;
 					pref = 50;
@@ -258,11 +388,17 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		}
 	}
 
-	private void transformTableModel(String columnNames[]) {
+
+	/**
+	 * Transform table model so that new columns match {@code columnNames[]}.
+	 *
+	 * @param columnNames the new table columns.
+	 */
+	private synchronized void transformTableModel(String columnNames[]) {
 		Object storedRegColumnData[] = new Object[numberOfRows];
 		Object frameNameColumnData[] = new Object[numberOfRows];
 
-		// Backup toredRegister and frameName columns
+		// Backup storedRegister and frameName columns
 		for (int row = 0; row < numberOfRows; row++) {
 			storedRegColumnData[row] = tableModel.getValueAt(row, storedRegisterColumn);
 			frameNameColumnData[row] = tableModel.getValueAt(row, frameNameColumn);
@@ -276,9 +412,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		// Update table-related data
 		numberOfColumns = tableModel.getColumnCount();
 		numberOfRows = tableModel.getRowCount();
-		storedRegisterColumn = numberOfColumns - storedRegColOffsetFromEnd;
-		frameNameColumn = numberOfColumns - frameNameColOffsetFromEnd;
-		resizeTableColumns(dataPerByte.isSelected());
+		frameNameColumn = calcTableColIndex(frameNameColOffsetFromEnd);
+		storedRegisterColumn = calcTableColIndex(storedRegColOffsetFromEnd);
+		resizeTableColumns();
 
 		// Restore toredRegister and frameName columns
 		for (int row = 0; row < numberOfRows; row++) {
@@ -290,146 +426,133 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		table.setVisible(true);
 	}
 
-	@Override
-	protected void initializePreGUI() {
-		// TODO: disable reset button too?
-
-		// TODO: disable actions performed when Tool not connected!
-		marsGui.getRunAssembleItem().addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				if (!isObserving()) // TODO verify
-					return;
-
-				if (debugBackStepper) {
-					System.out.flush();
-					System.err.println("RunAssemble");
-					System.err.flush();
-				}
-				runButtonsSetEnabled(true);
-				reset();
-			}
-		});
-
-		marsGui.getAssembleButton().addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				if (!isObserving()) // TODO verify
-					return;
-
-				if (debugBackStepper) {
-					System.out.flush();
-					System.err.println("Assemble");
-					System.err.flush();
-				}
-				runButtonsSetEnabled(true);
-				reset();
-			}
-		});
-
-	}
 
 	@Override
 	protected void initializePostGUI() {
+		if (inStandAloneMode == false) {
+			connectButton.addActionListener(new ActionListener() {
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					if (connectButton.isConnected()) {
+						restoreBackStepper();
+					} else {
+						checkMemConfChanged();
+						/*
+						 * User program should be recompiled (and executed) after
+						 * StackVisualizer is launched. This is required for
+						 * coherently storing the subroutine call stack.
+						 */
+						runButtonsSetEnabled(false);
+						/* Connecting StackVisualizer in the middle of program execution
+						 * will disable Back Stepper but the button will show as enabled.
+						 * Maybe we should disable it by hand or just don't mess with it.
+						 */
+						disableBackStepper();
 
-		connectButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				if (connectButton.isConnected()) {
-					restoreBackStepper(); // TODO We really need this?
-				} else {
-					/*
-					 * User program should be recompiled (and executed) after
-					 * StackVisualizer is launched. This is required for
-					 * coherently storing the subroutine call stack.
-					 */
-					runButtonsSetEnabled(false);
-					// Connecting StackVisualizer in the middle of program execution
-					// will disable Back Stepper but the button is enabled.
-					// Maybe we should disable it by hand or just don't mess with it.
-//					marsGui.getRunBackstepAction().isEnabled(); // TODO disable?
-					disableBackStepper();
-					getStackData();
-					updateSpDataRowColIndex();
-					table.repaint();
+						refreshGui();
 
-					String msg = "Back Stepping has been disabled.\n"
-							+ "Already running programs should be assembled again.";
-					showMessageWindow(msg);
+						String msg = "Back Stepping has been disabled.\n"
+								+ "Already running programs should be assembled again.";
+						showMessageWindow(msg);
+					}
 				}
-			}
-		});
-
+			});
+		}
+		checkMemConfChanged();
+		Simulator.getInstance().addObserver(this);
 		addNewTableRows(INITIAL_ROW_COUNT);
 		updateSpDataRowColIndex();
-		table.repaint(); // Maybe we can remove this
+		table.repaint();
 	}
 
-	/*
-	 * getStackData() fires a MemoryAccessNotice every time it reads from memory.
-	 * For this reason it should not be called in a code block handling a
-	 * MemoryAccessNotice of AccessNotice.READ type as it will lead in infinite
-	 * recursive calls of itself.
+
+	/**
+	 * Equivalent to {@code getStackData(0, numberOfRows)}.
 	 */
-	protected void getStackData() {
-		int col;
+	private void getStackData() {
+		getStackData(0, numberOfRows-1);
+	}
+
+
+	/**
+	 * Equivalent to {@code getStackData(row, row)}.
+	 */
+	private void getStackData(int row) {
+		getStackData(row, row);
+	}
+
+
+	/**
+	 * Fills/updates table rows [{@code startRow}, {@code endRow}] with data directly
+	 *  from Mars' memory instance.
+	 *
+	 * This method fires a {@link MemoryAccessNotice} every time it reads from memory.
+	 * For this reason it should not be called in a code block handling a
+	 * {@link MemoryAccessNotice} of {@code AccessNotice.READ} type as it will lead
+	 * in infinite recursive calls of itself.
+	 */
+	private synchronized void getStackData(int startRow, int endRow) {
+		int row, col, addr;
+
+		if (startRow < 0 || endRow < 0 || endRow >= numberOfRows) {
+			if (printMemContents)
+				System.out.println("getStackData end (invalid arguments)\n");
+			return;
+		}
 
 		if (printMemContents)
-			System.out.println("getStackData start");
+			System.out.println("getStackData(" + row + "," + endRow + ") start");
+		
+		addr = maxSpValueWordAligned - startRow * WORD_LENGTH_BYTES;
+		
 		/*
 		 * MARS supports three memory configurations. Only in the default configuration
 		 * the initial stack pointer value does NOT point to the highest address of the
 		 * stack. Nevertheless, in all three configurations, the initial address pointed
 		 * by $sp is a valid address whose contents can be written.
 		 *
-		 * TODO support visualization of addresses higher than initial $sp value
-		 *
 		 * Initial value of spAddr is 0x7FFFEFFC = 2147479548 (Default MIPS memory configuration).
 		 * The first 4 bytes (1 word) to be displayed are:
 		 * 0x7FFFEFFF, 0x7FFFEFFE, 0x7FFFEFFD, 0x7FFFEFFC or in decimal value:
 		 * 2147479551, 2147479550, 2147479549, 2147479548.
 		 */
-		for (int row = 0, addr = maxSpValue; row < numberOfRows; row++) {
-			tableModel.setValueAt(formatAddress(addr-3), row, ADDRESS_COLUMN);
+		for (row = startRow; row <= endRow; row++, addr -= WORD_LENGTH_BYTES) {
+			tableModel.setValueAt(formatAddress(addr), row, ADDRESS_COLUMN);
 			try {
-				if (dataPerByte.isSelected()) {
-					for (int j = FIRST_BYTE_COLUMN; j <= LAST_BYTE_COLUMN; j++, addr--) {
+				if (displayDataPerByte) {
+					/* Access word one byte at a time */
+					for (int bi = 0; bi < WORD_LENGTH_BYTES; bi++) {
 						int byteValue;
 						/*
 						 * Endianness determines whether byte position in value and
 						 * byte position in memory match.
 						 */
-						col = (endianness == LITTLE_ENDIAN) ? j : (LAST_BYTE_COLUMN-j) + FIRST_BYTE_COLUMN;
+						col = (endianness == LITTLE_ENDIAN) ? LAST_BYTE_COLUMN - bi : FIRST_BYTE_COLUMN + bi;
 						/*
-						 * MARS' check for addresses out of range is performed using word-aligned addresses.
+						 * MARS checks for addresses out of range using word-aligned addresses.
 						 * This means that the word on Memory.stackBaseAddress (highest stack address) can
 						 * be accessed during word-length data operations but not during half-word or byte-length
 						 * operations. This behavior is asymmetrical among the three memory configurations
 						 * supported by MARS.
 						 */
-						if (addr >= Memory.stackBaseAddress && addr <= (Memory.stackBaseAddress+3)) {
+						if (addr >= Memory.stackBaseAddress && addr <= (Memory.stackBaseAddress + (WORD_LENGTH_BYTES-1))) {
+							/* In case of highest stack address, access whole word and then
+							 * use shift and bitwise operations to get each byte.
+							 */
 							int word = memInstance.getWordNoNotify(alignToCurrentWordBoundary(addr));
-							byteValue = (word >> (WORD_LENGTH_BYTES-j)) & 0xffff;
-							if (displayDataPerByte)
-								System.out.println("(" + row + "," + col + ") - " + addr +": " +
-										formatByteLengthMemContents(byteValue));
-							tableModel.setValueAt(formatByteLengthMemContents(byteValue), row, col);
+							byteValue = (word >> (bi << 3)) & 0xff;
 						} else {
-							byteValue = memInstance.getByte(addr);
-							if (displayDataPerByte)
-								System.out.println("(" + row + "," + col + ") - " + addr +": " +
-										formatByteLengthMemContents(byteValue));
-							tableModel.setValueAt(formatByteLengthMemContents(byteValue), row, col);
+							byteValue = memInstance.getByte(addr + bi);
 						}
+						tableModel.setValueAt(formatNByteLengthMemContents(1, byteValue), row, col);
 					}
 				} else {
-					col = WORD_COLUMN;
-					addr -= WORD_LENGTH_BYTES-1; // TODO simplify addr update
-					tableModel.setValueAt(formatWordLengthMemContents(memInstance.getWord(addr--)), row, col);
+					tableModel.setValueAt(formatNByteLengthMemContents(WORD_LENGTH_BYTES, memInstance.getWord(addr)),
+							row, WORD_COLUMN);
 				}
 				if (printMemContents) {
 					System.out.print(tableModel.getValueAt(row, 0) + ": ");
-					if (dataPerByte.isSelected()) {
+					if (displayDataPerByte) {
 						for (int i = FIRST_BYTE_COLUMN; i <= LAST_BYTE_COLUMN; i++)
 							System.out.print(tableModel.getValueAt(row, i) + (i == LAST_BYTE_COLUMN ? "" : ","));
 					} else {
@@ -439,7 +562,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					System.out.println(" [" + tableModel.getValueAt(row, frameNameColumn) + "]");
 				}
 			} catch (AddressErrorException aee) {
-				aee.printStackTrace();
+				System.err.println("getStackData(): " + formatAddress(aee.getAddress()) + " AddressErrorException");
+			} catch (Exception e) {
+				e.printStackTrace();
 			}
 		}
 
@@ -447,35 +572,32 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			System.out.println("getStackData end\n");
 	}
 
+
 	@Override
 	protected void addAsObserver() {
 		// To observe stack segment, actual parameters should be
 		// reversed due to higher to lower address stack growth.
 		addAsObserver(Memory.stackLimitAddress, Memory.stackBaseAddress);
-		/*
-		 * TODO: verify that Memory.stackBaseAdress+1 to Memory.stackBaseAdress+3
-		 * can be observed during half word- or byte-length operations.
-		 * Update check in getTableRowIndex() too if needed.
-		 */
 		addAsObserver(RegisterFile.getRegisters()[SP_REG_NUMBER]);
 		addAsObserver(Memory.textBaseAddress, Memory.textLimitAddress);
+		addAsObserver(RegisterFile.getRegisters()[RA_REG_NUMBER]);
 	}
+
 
 	@Override
 	protected void deleteAsObserver() {
 		super.deleteAsObserver(); // Stop observing memory (default)
 		deleteAsObserver(RegisterFile.getRegisters()[SP_REG_NUMBER]); // Stop observing $sp
+		deleteAsObserver(RegisterFile.getRegisters()[RA_REG_NUMBER]); // Stop observing $ra
 	}
+
 
 	@Override
 	protected void processMIPSUpdate(Observable resource, AccessNotice notice) {
-
 //		System.out.println(notice.accessIsFromMIPS() +" " + notice.accessIsFromGUI() + " " + notice);
 
 		if (!notice.accessIsFromMIPS())
 			return;
-
-		disableBackStepper();
 
 		if (notice instanceof MemoryAccessNotice) {
 			MemoryAccessNotice m = (MemoryAccessNotice) notice;
@@ -490,8 +612,12 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		}
 	}
 
+
+	/**
+	 * Processes a received register update/notice (Read or Write).
+	 */
 	private void processRegisterAccessNotice(RegisterAccessNotice notice) {
-		// Currently only $sp is observed
+		// Currently only $sp is observed ($ra also but not for stack modification ops)
 		// TODO: What about observing frame pointer?
 		if (notice.getAccessType() == AccessNotice.READ)
 			return;
@@ -509,9 +635,15 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				addNewTableRows(5);
 			}
 			table.repaint(); // Required for coloring $sp position during popping.
+		} else if (notice.getRegisterName().equals("$ra")) {
+			raWrittenInPrevInstr = true;
 		}
 	}
 
+
+	/**
+	 * Processes a received memory update/notice (Read or Write) targeting the stack segment.
+	 */
 	private void processStackMemoryUpdate(MemoryAccessNotice notice) {
 		String regName = "", frameName = "";
 
@@ -535,45 +667,107 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					" (stored: " + regName + ")");
 		}
 
-		int row = getTableRowIndex(notice.getAddress());
+		int row;
+		try {
+			row = getTableRowIndex(notice.getAddress());
+		} catch (SVException sve) {
+			System.err.println("processStackMemoryUpdate(): " + sve.getMessage());
+			return;
+		}
 
 		if (debug)
 			System.out.println("Addr: " + formatAddress(notice.getAddress()) + " - tableIndex: " + row + " (" + regName + ")");
 
 		tableModel.setValueAt(regName, row, storedRegisterColumn);
 		tableModel.setValueAt(frameName, row, frameNameColumn);
-		getStackData();
+		getStackData(row);
 		table.repaint();
 	}
 
-	private int getTableRowIndex(int memAddress) {
-		if (memAddress > Memory.stackBaseAddress || memAddress < Memory.stackLimitAddress) {
-			System.err.println("getTableRowIndex() only works for stack segment addresses");
-			return -1;
+
+	/**
+	 * Adds more rows in table.
+	 *
+	 * @param numRowsToAdd the number of rows to add.
+	 */
+	private synchronized void addNewTableRows(int numRowsToAdd) {
+		int remainingRowsToAdd = maxTableRowsAllowed() - numberOfRows;
+		if (numRowsToAdd > remainingRowsToAdd)
+			numRowsToAdd = remainingRowsToAdd;
+		if (numRowsToAdd == 0) {
+			return;
+		}
+		for (int ri = 0; ri < numRowsToAdd; ri++)
+			tableModel.addRow(new Object[numberOfColumns]);
+		numberOfRows = tableModel.getRowCount();
+		getStackData();
+	}
+
+
+	/**
+	 * @return the maximum allowed number of table rows.
+	 */
+	private int maxTableRowsAllowed() {
+		return (maxSpValueWordAligned - Memory.stackLimitAddress) / WORD_LENGTH_BYTES;
+	}
+
+
+	/**
+	 * @return the index of the table row that {@code memAddress} should be stored
+	 * if it belongs to the stack segment; else (-1).
+	 * @throws SVException
+	 */
+	private int getTableRowIndex(int memAddress) throws SVException {
+		if (!isStackSegAddress(memAddress)) {
+			throw new SVException("An address not in the stack segment was provided (" + formatAddress(memAddress) + ")");
 		}
 		int rowIndex = (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
 		if (rowIndex >= numberOfRows) {
 			addNewTableRows(rowIndex - numberOfRows + 10);
 			table.repaint();
 		}
+		if (rowIndex < 0) { // Higher address than $sp value at program start
+			int numNewRows = -rowIndex;
+			int newMaxSpValueWordAligned = maxSpValueWordAligned + numNewRows * WORD_LENGTH_BYTES;
+			if (newMaxSpValueWordAligned > Memory.stackBaseAddress) {
+				numNewRows -= (newMaxSpValueWordAligned - Memory.stackBaseAddress) / WORD_LENGTH_BYTES;
+			}
+			maxSpValueWordAligned += numNewRows * WORD_LENGTH_BYTES;
+			addNewTableRows(numNewRows);
+			refreshGui();
+			return (maxSpValueWordAligned - alignToCurrentWordBoundary(memAddress)) / WORD_LENGTH_BYTES;
+		}
 		return rowIndex;
 	}
 
-	private void addNewTableRows(int rowNumber) {
-		for (int ri = 0; ri < rowNumber; ri++)
-			tableModel.addRow(new Object[numberOfColumns]);
-		numberOfRows = tableModel.getRowCount();
-		getStackData();
-	}
 
-	private int getTableColumnIndex(int memAddress) {
-		if (memAddress > Memory.stackBaseAddress || memAddress < Memory.stackLimitAddress) {
-			System.err.println("getTableColumnIndex() only works for stack segment addresses");
-			return -1;
-		}
+	/**
+	 * @return the index of the table column that {@code memAddress} should be stored
+	 * if it belongs to the stack segment; else (-1).
+	 * @throws SVException
+	 */
+	private int getTableColumnIndex(int memAddress) throws SVException {
+		if (!isStackSegAddress(memAddress))
+			throw new SVException("An address not in the stack segment was provided (" + formatAddress(memAddress) + ")");
 		return LAST_BYTE_COLUMN - (memAddress % WORD_LENGTH_BYTES);
 	}
 
+
+	/**
+	 * @return true if {@code memAddress} is in stack segment; else false.
+	 */
+	private boolean isStackSegAddress(int memAddress) {
+		/*
+		 * In default memory configuration .stackLimitAddress is address 0x7fbffffc instead of 0x10040000
+		 * mentioned in "MIPS Memory Configuration" window.
+		 */
+		return (memAddress > Memory.stackLimitAddress && memAddress <= Memory.stackBaseAddress);
+	}
+
+
+	/**
+	 * Processes a received memory update/notice (Read or Write).
+	 */
 	private void processTextMemoryUpdate(MemoryAccessNotice notice) {
 		if (notice.getAccessType() == AccessNotice.WRITE)
 			return;
@@ -583,6 +777,9 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 					+ " value: " + notice.getValue() /*+ " = "*/);
 		}
 //		printBin(notice.getValue());
+
+		boolean localRaWrittenInPrevInstr = raWrittenInPrevInstr;
+		raWrittenInPrevInstr = false;
 
 		try {
 			ProgramStatement stmnt =  memInstance.getStatementNoNotify(notice.getAddress());
@@ -612,10 +809,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				int targetAdrress = stmnt.getOperand(J_ADDR_OPERAND_LIST_INDEX) * WORD_LENGTH_BYTES;
 				String targetLabel = addrToTextSymbol(targetAdrress);
 				if (isJumpAndLinkInstruction(instrName)) {
-					ras.add(stmnt.getAddress());
-					frameNameToBeCreated = targetLabel;
-					Integer count = activeFunctionCallStats.addCall(targetLabel);
-					frameNameToBeCreated += " (" + count + ")";
+					registerNewSubroutineCall(stmnt, targetLabel);
+				} else if (detectJalEquivalentInstructions == true && isJumpInstruction(instrName)) {
+					if (localRaWrittenInPrevInstr == true) {
+						registerNewSubroutineCall(stmnt, targetLabel);
+					}
 				}
 				if (targetLabel != null) {
 					if (debug) {
@@ -629,45 +827,66 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			}
 			else if (isJumpRegInstruction(instrName)) {
 				int targetRegister = stmnt.getOperand(R_RS_OPERAND_LIST_INDEX);
-				// TODO: check $ra only (?)
 				Register reg = RegisterFile.getRegisters()[targetRegister];
 				int returnAddress = reg.getValue();
-				// returnAddress-4 is needed as PC+4 is stored in $ra when jal is executed.
+				// returnAddress-WORD_LENGTH_BYTES is needed as PC+WORD_LENGTH_BYTES is stored in $ra when jal is executed.
 				int jalStatementAddress = returnAddress - WORD_LENGTH_BYTES;
 				ProgramStatement jalStatement =  memInstance.getStatementNoNotify(jalStatementAddress);
 				int jalTargetAddress = jalStatement.getOperand(J_ADDR_OPERAND_LIST_INDEX) * WORD_LENGTH_BYTES;
 				String exitingSubroutineName = addrToTextSymbol(jalTargetAddress);
 				activeFunctionCallStats.removeCall(exitingSubroutineName);
 				if (debug) {
-					System.out.println("Returning from: " + exitingSubroutineName + " (" +ras.size() +
+					System.out.println("Returning from: " + exitingSubroutineName + " (" + ras.size() +
 							") to line: " + jalStatement.getSourceLine());
 				}
 
 				try {
 					Integer rasTopAddress = ras.remove(ras.size()-1);
 					if (rasTopAddress.compareTo(jalStatementAddress) != 0) {
-						System.out.println("Mismatching return address: " + rasTopAddress + " - " + jalStatementAddress);
+						System.err.println("Mismatching return address: " + formatAddress(rasTopAddress) + " vs " + formatAddress(jalStatementAddress) +
+								" (Expected/jal vs Actual/jr)");
 					}
-				} catch (IndexOutOfBoundsException e) {
-					// Exception is thrown whenever function calling instructions are back-stepped (undone)
-					// and again executed. Undoing the last step is not supported!
-					//
-					// It also happens in case StackVisualizer gets disconnected while user program is executing
-					// and then is again connected. TODO fix
-					//
-					// It also happens when tool's Reset button is pressed while user program is executing.
-
-					// e.printStackTrace();
+				} catch (IndexOutOfBoundsException iobe) {
+					/* Exception is thrown whenever:
+					 * 1) Subroutine calling instructions are back-stepped (undone) and again executed.
+					 * Undoing the last step should not be supported! FIXED: BackStepper is disabled.
+					 *
+					 * 2) In case StackVisualizer gets disconnected while user program is executing and
+					 * then is again connected. FIXED: Tool's disconnect button is disabled during
+					 * execution/simulation and then again enabled at the end.
+					 *
+					 * 3) When tool's Reset button is pressed while the user program is executing.
+					 * FIXED: Removed ras and activeFunctionCallStats reset operations from reset()
+					 */
+					System.err.println("Mismatching number of subroutine calls and returns.");
 				}
 			}
-		} catch (AddressErrorException e) {
-			// Suppress such warnings
-//			e.printStackTrace();
+		} catch (AddressErrorException aee) {
+			System.err.println("processTextMemoryUpdate(): " + formatAddress(aee.getAddress()) + " AddressErrorException");
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
 
+
+	/**
+	 * Update {@code ras}, {@code activeFunctionCallStats} and {@code frameNameToBeCreated}
+	 * as of a new subroutine call.
+	 * @param stmnt the jump/jal instruction statement that invokes the new subroutine call.
+	 * @param targetLabel the name/label of the new subroutine that is called.
+	 */
+	private void registerNewSubroutineCall(ProgramStatement stmnt, String targetLabel) {
+		ras.add(stmnt.getAddress());
+		Integer count = activeFunctionCallStats.addCall(targetLabel);
+		frameNameToBeCreated = targetLabel + " (" + count + ")";
+	}
+
+
+	/**
+	 * @param instrName instruction name.
+	 *
+	 * @return true if instruction name matches "sw", "sh", "sc" or "sb"; else false.
+	 */
 	private boolean isStoreInstruction(String instrName) {
 		if (instrName.equals("sw") || instrName.equals("sh") ||
 				instrName.equals("sc") || instrName.equals("sb"))
@@ -675,20 +894,44 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		return false;
 	}
 
+
+	/**
+	 * @param instrName instruction name.
+	 *
+	 * @return true if instruction name matches "j"; else false.
+	 */
 	private boolean isJumpInstruction(String instrName) {
 		return (instrName.equals("j"));
 	}
 
+
+	/**
+	 * @param instrName instruction name.
+	 *
+	 * @return true if instruction name matches "jal"; else false.
+	 */
 	private boolean isJumpAndLinkInstruction(String instrName) {
 		return (instrName.equals("jal"));
 	}
 
+
+	/**
+	 * @param instrName instruction name.
+	 *
+	 * @return true if instruction name matches "jr"; else false.
+	 */
 	private boolean isJumpRegInstruction(String instrName) {
 		return (instrName.equals("jr"));
 	}
 
-	private String addrToTextSymbol(int address) {
-		String addrStr = String.valueOf(address);
+
+	/**
+	 * Translates a text segment address ({@code memAddress}) to a symbol/label.
+	 *
+	 * @return the corresponding label; else null.
+	 */
+	private String addrToTextSymbol(int memAddress) {
+		String addrStr = String.valueOf(memAddress);
 		SymbolTable localSymTable = Globals.program.getLocalSymbolTable();
 		Symbol symbol = localSymTable.getSymbolGivenAddressLocalOrGlobal(addrStr);
 		if (symbol != null) {
@@ -699,16 +942,24 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		return null;
 	}
 
+
+	/**
+	 * @return the current stack pointer ($sp) value.
+	 */
 	private int getSpValue() {
 		return RegisterFile.getValue(SP_REG_NUMBER);
 	}
 
-	/*
-	 * The ignoreObserving flag is required for disabling
-	 * BackStepper when the Connect button is pressed.
-	 * (The tool is not yet registered as observing)
+
+	/**
+	 * Disables back stepping.
 	 */
 	private void disableBackStepper() {
+		/*
+		 * The ignoreObserving flag is required for disabling
+		 * BackStepper when the Connect button is pressed.
+		 * (The tool is not yet registered as observing)
+		 */
 		if (Globals.program == null)
 			return;
 		BackStepper bs = Globals.program.getBackStepper();
@@ -716,12 +967,16 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			return;
 		if (bs.enabled()) {
 			if (debugBackStepper)
-				System.err.println("Disabled BackStepper");
+				System.out.println("Disabled BackStepper");
 			bs.setEnabled(false);
 			disabledBackStep = true;
 		}
 	}
 
+
+	/**
+	 * Re-enables back stepping.
+	 */
 	private void restoreBackStepper() {
 		if (disabledBackStep) {
 			disabledBackStep = false;
@@ -732,68 +987,90 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				return;
 			if (!bs.enabled()) {
 				if (debugBackStepper)
-					System.err.println("Enabled BackStepper");
+					System.out.println("Enabled BackStepper");
 				bs.setEnabled(true);
 			}
 		}
 	}
 
-	private void runButtonsSetEnabled(boolean state) {
-		marsGui.getRunGoAction().setEnabled(state);
-		marsGui.getRunStepAction().setEnabled(state);
-	}
 
 	/**
-	 * Utility method to align given address to current full word boundary,
-	 * if not already aligned.
-	 *
-	 * @param address
-	 *            a memory address (any int value is potentially valid)
-	 * @return address aligned to current word boundary (divisible by 4)
+	 * Enables or disables Run buttons as of parameter.
 	 */
-	private int alignToCurrentWordBoundary(int address) {
-		if (Memory.wordAligned(address))
-			return address;
-		return (Memory.alignToWordBoundary(address) - WORD_LENGTH_BYTES);
-	}
-
-	private String formatAddress(int address) {
-		if (hexAddressesCheckBox.isSelected())
-			return Binary.intToHexString(address);
+	private void runButtonsSetEnabled(boolean enable) {
+		if (enable == true)
+			FileStatus.set(FileStatus.RUNNABLE);
 		else
-			return Integer.toString(address);
+			FileStatus.set(FileStatus.TERMINATED);
 	}
 
-	private String formatWordLengthMemContents(int data) {
-		if (hexValuesCheckBox.isSelected())
-			return intTo8DigitHexStringNoPrefix(data);
+
+	/**
+	 * Aligns the given address to the corresponding full-word boundary, if not already aligned.
+	 *
+	 * @param memAddress the memory address to be aligned (any {@code int} value is potentially valid).
+	 * @return the calculated word-aligned address (divisible by {@code WORD_LENGTH_BYTES}).
+	 */
+	private int alignToCurrentWordBoundary(int memAddress) {
+		if (Memory.wordAligned(memAddress))
+			return memAddress;
+		return (Memory.alignToWordBoundary(memAddress) - WORD_LENGTH_BYTES);
+	}
+
+
+	/**
+	 * Formats a memory address to hexadecimal or decimal representation according to {@code hexAddressesCheckBox}.
+	 *
+	 * @param memAddress the memory address to be formatted.
+	 * @return a string containing the hexadecimal or decimal representation of {@code memAddress}.
+	 */
+	private String formatAddress(int memAddress) {
+		if (displayHexAddresses)
+			return Binary.intToHexString(memAddress);
+		else
+			return Integer.toString(memAddress);
+	}
+
+
+	/**
+	 * Formats memory contents of N-byte length to hexadecimal or decimal representation
+	 * according to hexAddressesCheckBox. In case of hexadecimal representation, no
+	 * "0x" prefix is added.
+	 *
+	 * @param numBytes memory content length in bytes.
+	 * @param data memory content to be formatted.
+	 * @return a string containing the hexadecimal or decimal representation of data.
+	 */
+	private String formatNByteLengthMemContents(int numBytes, int data) {
+		if (displayHexValues)
+			return nBytesToHexStringNoPrefix(numBytes, data);
 		else
 			return Integer.toString(data);
 	}
 
-	private String intTo8DigitHexStringNoPrefix(int data) {
+
+	/**
+	 * Formats data of N-byte length to a hexadecimal representation string without a "0x" prefix.
+	 *
+	 * @param numBytes data length in bytes.
+	 * @param data the data to be formatted.
+	 * @return a string containing the resulted 2*N hexadecimal digits.
+	 * Leading zeros are added if required.
+	 */
+	private String nBytesToHexStringNoPrefix(int numBytes, int data) {
 		String leadingZero = new String("0");
 		String ret = Integer.toHexString(data);
-		while (ret.length() < 8)
+		while (ret.length() < (numBytes<<1)) // Add leading zeros if required
 			ret = leadingZero.concat(ret);
 		return ret;
 	}
 
-	private String formatByteLengthMemContents(int data) {
-		if (hexValuesCheckBox.isSelected())
-			return intTo2DigitHexStringNoPrefix(data);
-		else
-			return Integer.toString(data);
-	}
 
-	private String intTo2DigitHexStringNoPrefix(int data) {
-		String leadingZero = new String("0");
-		String ret = Integer.toHexString(data);
-		while (ret.length() < 2)
-			ret = leadingZero.concat(ret);
-		return ret;
-	}
-
+	/**
+	 * Print the binary representation of a number without a "0b" prefix.
+	 *
+	 * @param num the number to be printed.
+	 */
 	@SuppressWarnings("unused")
 	private void printBin(int num) {
 		int count = 0;
@@ -803,58 +1080,210 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		System.out.print("\n");
 	}
 
+
 	@Override
 	protected void reset() {
-		if (debugBackStepper) {
-			System.out.flush();
-			System.err.println("ResetAction");
-			System.err.flush();
+		/*
+		 * Do not reset/clear here ras or activeFunctionCallStats.
+		 */
+		if (debug) {
+			System.out.println("ToolReset");
 		}
-		ras.clear();
-		activeFunctionCallStats.reset();
-		resetStoredRegAndFrameNameColumns(0, numberOfRows-1);
+		refreshGui();
+	}
+
+
+	/**
+	 * Refresh memory contents and $sp position in table.
+	 */
+	private synchronized void refreshGui() {
 		getStackData();
 		updateSpDataRowColIndex();
 		table.repaint();
 	}
 
+
+	/**
+	 * Update data table indexes ({@code spDataRowIndex},{@code spDataColumnIndex})
+	 * as of where $sp points to.
+	 */
 	private void updateSpDataRowColIndex() {
 		int spValue = getSpValue();
-		spDataRowIndex = getTableRowIndex(spValue);
-		spDataColumnIndex = getTableColumnIndex(spValue);
+		try {
+			spDataRowIndex = getTableRowIndex(spValue);
+			spDataColumnIndex = getTableColumnIndex(spValue);
+		} catch (SVException sve) {
+			System.err.println("updateSpDataRowColIndex(): " + sve.getMessage());
+		}
 	}
 
-	private void resetStoredRegAndFrameNameColumns(int startRow, int endRow) {
+
+	/**
+	 * Empties the contents of columns "Stored Reg" and "Call Layout" between
+	 * rows [{@code startRow}, {@code endRow}].
+	 */
+	private synchronized void resetStoredRegAndFrameNameColumns(int startRow, int endRow) {
 		for (int row = startRow; row <= endRow; row++) {
 			tableModel.setValueAt("", row, storedRegisterColumn);
 			tableModel.setValueAt("", row, frameNameColumn);
 		}
 	}
 
+
+	/**
+	 * Calculate table column index when offset from last table column is provided.
+	 *
+	 * @param offsetFromEnd the offset from last table column (starting from 0).
+	 * @return the table column index.
+	 */
+	private int calcTableColIndex(int offsetFromEnd) {
+		return numberOfColumns - offsetFromEnd - 1;
+	}
+
+
+	/**
+	 * A {@link SimulatorNotice} is handled locally in {@link StackVisualizer}, while all
+	 * other notices are handled by supertype {@link AbstractMarsToolAndApplication}.
+	 */
+	@Override
+	public void update(Observable observable, Object accessNotice) {
+		if (observable == mars.simulator.Simulator.getInstance()) {
+			processSimulatorUpdate((SimulatorNotice) accessNotice);
+		} else {
+			super.update(observable, accessNotice);
+		}
+	}
+
+
+	/**
+	 * Process a {@link SimulatorNotice} and handle {@code SIMULATOR_START} or
+	 * {@code SIMULATOR_STOP} accordingly.
+	 */
+	private void processSimulatorUpdate(SimulatorNotice notice) {
+		int action = notice.getAction();
+		if (debug)
+			System.out.println("\nSimulatorNotice: " + ((action == SimulatorNotice.SIMULATOR_START) ? "Start" : "End"));
+		if (action == SimulatorNotice.SIMULATOR_START)
+			onSimulationStart();
+		else if (action == SimulatorNotice.SIMULATOR_STOP)
+			onSimulationEnd();
+	}
+
+
+	/**
+	 * Checks if {@code MemoryConfiguration} has changes and if yes,
+	 * performs the required actions.
+	 */
+	private void checkMemConfChanged() {
+		int newStackBaseAddr = Memory.stackBaseAddress;
+		if (newStackBaseAddr != currStackBaseAddress) {
+			if (debug) {
+				System.out.println("Memory configuration change detected. New stack base address: "
+						+ formatAddress(newStackBaseAddr));
+			}
+			currStackBaseAddress = newStackBaseAddr;
+			maxSpValueWordAligned = Memory.stackPointer;
+			if (isObserving()) {
+				/*
+				 * Without the isObserving check, in case memory configuration change is detected
+				 * when the tool is not connected, connecting it will result in observing two times
+				 * each resource and receiving two times the same access notices.
+				 */
+				synchronized (Globals.memoryAndRegistersLock) {
+					deleteAsObserver();
+					addAsObserver(); /* Start observing the new resources */
+				}
+				refreshGui();
+			}
+		}
+	}
+
+	/**
+	 * Callback method after a simulation starts.
+	 * A simulation starts each time a Run button is pressed (stepped or not).
+	 */
+	private synchronized void onSimulationStart() {
+		if (!isObserving())
+			return;
+		if (VenusUI.getReset()) { // GUI Reset button clicks are also handled here.
+			if (debug)
+				System.out.println("GUI registers/memory reset detected");
+			 /* On memory configuration changes, the registers are reset. */
+			checkMemConfChanged();
+			/*
+			 * On registers/memory reset, clear data related to subroutine calls,
+			 * and reset/update table data.
+			 */
+			ras.clear();
+			activeFunctionCallStats.reset();
+			tableModel.setRowCount(INITIAL_ROW_COUNT);
+			numberOfRows = tableModel.getRowCount();
+			resetStoredRegAndFrameNameColumns(0, numberOfRows-1);
+			refreshGui();
+		}
+		disableBackStepper();
+		onSimStartEndSetEnabled(false);
+	}
+
+
+	/**
+	 * Callback method after a simulation ends.
+	 * A simulation starts/ends each time a Run button is pressed (stepped or not).
+	 */
+	private void onSimulationEnd() {
+		if (!isObserving())
+			return;
+		onSimStartEndSetEnabled(true);
+	}
+
+
+	/**
+	 * Enables/disables GUI components on simulation start/end.
+	 */
+	private void onSimStartEndSetEnabled(boolean enable) {
+		jalEquivInstrCheckBox.setEnabled(enable);
+		if (inStandAloneMode == false) {
+			/* Connect button is not available in stand-alone mode. */
+			connectButton.setEnabled(enable);
+		}
+	}
+
+
+	/**
+	 * @return true if we are in stepped execution.
+	 */
+	@SuppressWarnings("unused")
+	private boolean inSteppedExecution() {
+		if (Globals.program == null)
+			return false;
+		return Globals.program.inSteppedExecution();
+	}
+
+
 	@Override
 	protected JComponent getHelpComponent() {
-		// TODO write a proper help component
 		final String helpContent = "Stack Visualizer\n\n"
 				+ "Release: " + versionID + "   (" + releaseDate + ")\n\n"
-				+ "Developed by George Z. Zachos (gzachos@cse.uoi.gr) and\n"
-				+ "Petros Manousis (pmanousi@cs.uoi.gr) under the supervision of\n"
-				+ "Aristides (Aris) Efthymiou (efthym@cse.uoi.gr).\n\n"
+				+ "Developed by George Z. Zachos (gzachos@cse.uoi.gr) and Petros Manousis (pmanousi@cs.uoi.gr)\n"
+				+ "under the supervision of Aristides (Aris) Efthymiou (efthym@cse.uoi.gr).\n\n"
 				+ "About\n"
-				+ "This tool allows the user to view in real time the memory modification operations\n"
-				+ "taking place in the stack segment. The user can also observe how the stack grows.\n"
-				+ "The address pointed by the stack pointer is displayed in an orange background\n"
-				+ "while the whole word-length data in a yellow one. Lower addresses have a grey\n"
-				+ "background (given that stack growth takes place form higher to lower addresses).\n"
-				+ "The names of the registers whose contents are stored (sw, sh, sb etc.) in the\n"
-				+ "stack, are shown in the \"Stored Reg\" column. In the \"Call Layout\" column, the subroutine\n"
-				+ "frame (activation record) layout is displayed, with subroutine names placed on the highest\n"
-				+ "address of the corresponding frames.\n\n"
-				+ "Note\n"
-				+ "This program is suposed to be used as a MARS Tool and NOT as a stand-alone application."
-				+ "\n\n"
+				+ "This tool allows the user to view in real time the memory modification operations taking place in the stack\n"
+				+ "segment with emphasis to $sp-relative memory accesses. The user can also observe how pushes/pops to/from the\n"
+				+ "stack take place. The address pointed by the stack pointer is displayed in an orange background while the whole\n"
+				+ "word-length data in yellow. Lower addresses have a grey background (given that stack growth takes place\n"
+				+ "from higher to lower addresses). The names of the registers whose contents are stored (sw, sh, sb etc.) in the\n"
+				+ "stack, are shown in the \"Stored Reg\" column. In the \"Call Layout\" column, the subroutine frame (activation record)\n"
+				+ "layout is displayed, with subroutine names placed on the first address written in the corresponding frame.\n\n"
+				+ "Options\n"
+				+ "1) \"Display data per byte\": When enabled, the bytes of each word (4 Bytes) are displayed separately.\n"
+				+ "2) \"Hexadecimal Addresses\": Whether memory addresses are formatted in hexadecimal or decimal representation.\n"
+				+ "3) \"Hexadecimal Values\": Whether memory content is formatted in hexadecimal or decimal representation.\n"
+				+ "4) \"Detect jal-equivalent instructions\": Whether instruction sequences equivalent to `jal` should be detected.\n"
+				+ "     In example, `la $ra, somelabel` immediately followed by `j somelabel`.\n\n"
+				+ "GitHub repository\n"
+				+ "https://github.com/gzachos/mars-stack-visualizer\n\n"
 				+ "Contact\n"
-				+ "For questions or comments contact: George Z. Zachos (gzachos@cse.uoi.gr) or\n"
-				+ "Aristides Efthymiou (efthym@cse.uoi.gr)";
+				+ "For questions or comments contact: George Z. Zachos (gzachos@cse.uoi.gr) or Aristides Efthymiou (efthym@cse.uoi.gr)";
 		JButton help = new JButton("Help");
 		help.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -864,18 +1293,28 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 		return help;
 	}
 
+
 	private void showMessageWindow(String message) {
 		JOptionPane.showMessageDialog(theWindow, message);
 	}
 
-	// Class definition
-	private static class ActiveFunctionCallStats {
+
+	/**
+	 * Active subroutine call statistics.
+	 */
+	private static class ActiveSubroutineStats {
 		private HashMap<String, Integer> activeCalls;
 
-		public ActiveFunctionCallStats() {
+		public ActiveSubroutineStats() {
 			activeCalls = new HashMap<>(0);
 		}
 
+		/**
+		 * Adds one more subroutine call to statistics.
+		 *
+		 * @param subroutineName name of subroutine to be added.
+		 * @return the number of active subroutine calls of {@code subroutineName}.
+		 */
 		public Integer addCall(String subroutineName) {
 			Integer newValue;
 			if (activeCalls.containsKey(subroutineName)) {
@@ -888,6 +1327,11 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 			return newValue;
 		}
 
+		/**
+		 * Removes one subroutine call from statistics.
+		 *
+		 * @param subroutineName name of subroutine to be removed.
+		 */
 		public void removeCall(String subroutineName) {
 			Integer oldValue = activeCalls.get(subroutineName);
 			if (oldValue == null)
@@ -896,8 +1340,21 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				activeCalls.replace(subroutineName, oldValue - 1);
 		}
 
+		/**
+		 * Reset active call statistics.
+		 */
 		public void reset() {
 			activeCalls.clear();
+		}
+	}
+
+
+	/**
+	 * Trivial {@link Exception} implementation for {@link StackVisualizer}.
+	 */
+	private static class SVException extends Exception {
+		public SVException(String message) {
+			super(message);
 		}
 	}
 

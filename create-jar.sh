@@ -16,4 +16,4 @@ then
 	NAME="${NAME}.jar"
 fi
 
-jar cmf mainclass.txt ${NAME} PseudoOps.txt Config.properties Syscall.properties Settings.properties MARSlicense.txt mainclass.txt MipsXRayOpcode.xml registerDatapath.xml controlDatapath.xml ALUcontrolDatapath.xml CreateMarsJar.bat Mars.java Mars.class docs help images mars 
+jar cmf mainclass.txt ${NAME} PseudoOps.txt Config.properties Syscall.properties Settings.properties MARSlicense.txt mainclass.txt MipsXRayOpcode.xml registerDatapath.xml controlDatapath.xml ALUcontrolDatapath.xml CreateMarsJar.bat create-jar.sh Mars.java Mars.class docs help images mars 
