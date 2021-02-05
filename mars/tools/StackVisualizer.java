@@ -90,7 +90,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 	private static String versionID   = "1.5";
 	private static String version     = "Version " + versionID + " (George Z. Zachos, Petros Manousis)";
 	private static String heading     = "Visualizing Stack Modification Operations";
-	private static String releaseDate = "03-Feb-2021";
+	private static String releaseDate = "06-Feb-2021";
 
 	// We need the following definition here to initialize numberOfColumns
 	/** Table column names for displaying data per byte. */
