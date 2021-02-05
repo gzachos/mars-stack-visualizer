@@ -24,7 +24,7 @@ the corresponding frame.
  * "Display data per byte": When enabled, the bytes of each word (4 Bytes) are displayed separately.
  * "Hexadecimal Addresses": Whether memory addresses are formatted in hexadecimal or decimal representation.
  * "Hexadecimal Values": Whether memory content is formatted in hexadecimal or decimal representation.
- * "Detect jal-equivalent instructions": Whether instruction sequences equivalent to `jal` should be detected. i.e. `la $sp, somelabel` immediately followed by `j somelabel`.
+ * "Detect jal-equivalent instructions": Whether instruction sequences equivalent to `jal` should be detected. i.e. `la $ra, somelabel` immediately followed by `j somelabel`.
 
 
 ## Project Supervisor

@@ -1279,7 +1279,7 @@ public class StackVisualizer extends AbstractMarsToolAndApplication {
 				+ "2) \"Hexadecimal Addresses\": Whether memory addresses are formatted in hexadecimal or decimal representation.\n"
 				+ "3) \"Hexadecimal Values\": Whether memory content is formatted in hexadecimal or decimal representation.\n"
 				+ "4) \"Detect jal-equivalent instructions\": Whether instruction sequences equivalent to `jal` should be detected.\n"
-				+ "     In example, `la $sp, somelabel` immediately followed by `j somelabel`.\n\n"
+				+ "     In example, `la $ra, somelabel` immediately followed by `j somelabel`.\n\n"
 				+ "GitHub repository\n"
 				+ "https://github.com/gzachos/mars-stack-visualizer\n\n"
 				+ "Contact\n"
