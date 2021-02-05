@@ -13,10 +13,12 @@ memory modification operations taking place in the stack segment with emphasis t
 the stack take place. The address pointed by the stack pointer is displayed in an
 orange background while the whole word-length data in a yellow one. Lower addresses
 have a grey background (given that stack growth takes place from higher to lower addresses).
-The names of the registers whose contents are stored (`sw`, `sh`, `sb` etc.) in the stack,
-are shown in the "Stored Reg" column. In the "Call Layout" column, the subroutine frame
-(activation record) layout is displayed, with subroutine names placed on the first
-address written in the corresponding frame. 
+The names of the registers whose contents are stored in the stack, are shown in the
+"Stored Reg" column. In the "Call Layout" column, the subroutine frame (activation record)
+layout is displayed, with subroutine names placed on the first address written in
+the corresponding frame. 
+
+![sv1.png](./screenshots/sv1.png)
 
 ### Tool Options
  * "Display data per byte": When enabled, the bytes of each word (4 Bytes) are displayed separately.
